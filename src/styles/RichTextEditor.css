@@ -28,6 +28,30 @@
   color: #495057;
 }
 
+.toolbar-font-size {
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.toolbar-input {
+  height: 32px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 0 8px;
+  background: #ffffff;
+  color: #495057;
+  font-size: 14px;
+  width: 64px;
+  text-align: center;
+}
+
+.toolbar-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
 .toolbar-btn:hover {
   background: #e9ecef;
   border-color: #adb5bd;
@@ -193,5 +217,11 @@
   .toolbar-btn {
     width: 28px;
     height: 28px;
+  }
+
+  .toolbar-input {
+    height: 28px;
+    font-size: 13px;
+    width: 56px;
   }
 }

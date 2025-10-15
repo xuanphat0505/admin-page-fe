@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FiType,
   FiAlignLeft,
@@ -31,37 +31,61 @@ const ImageBlock = ({ block, onUpdate, onRemove, attributes, listeners, setNodeR
     if (block.content instanceof File) {
       const url = URL.createObjectURL(block.content);
       setImageUrl(url);
-
-      // Cleanup URL 
-      return () => {
-        URL.revokeObjectURL(url);
-      };
-    } else {
-      setImageUrl('');
+      return () => URL.revokeObjectURL(url);
     }
-  }, [block.content]);
+    if (typeof block.content === 'string' && block.content) {
+      setImageUrl(block.content);
+      return undefined;
+    }
+    if (typeof block.url === 'string' && block.url) {
+      setImageUrl(block.url);
+      return undefined;
+    }
+    setImageUrl('');
+    return undefined;
+  }, [block.content, block.url]);
 
   const handleImageUpload = (file) => {
-    onUpdate(file);
+    if (file) {
+      onUpdate({ content: file, url: '' });
+    }
   };
 
   const handleImageRemove = () => {
-    onUpdate(null);
+    onUpdate({ content: null, url: '', alt: '', caption: '' });
   };
+
+  const handleAltChange = (value) => {
+    onUpdate({ alt: value });
+  };
+
+  const handleCaptionChange = (value) => {
+    onUpdate({ caption: value });
+  };
+
+  const hasImage =
+    block.content instanceof File ||
+    (typeof block.content === 'string' && block.content) ||
+    (typeof block.url === 'string' && block.url);
+
+  const altValue = block.alt || '';
+  const captionValue = block.caption || '';
+  const isAltInvalid = hasImage && !altValue.trim();
+  const isCaptionInvalid = hasImage && !captionValue.trim();
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="block card">
       <div className="block-header">
         <div className="left">
           <FiImage className="block-icon" />
-          <span className="title">Image</span>
+          <span className="title">Ảnh</span>
         </div>
         <button type="button" className="pill danger" onClick={onRemove}>
           <FiTrash2 />
         </button>
       </div>
       <div className="block-body">
-        {block.content instanceof File ? (
+        {hasImage ? (
           <div className="image-preview">
             <img src={imageUrl} alt="Preview" className="preview-image" />
             <button type="button" className="remove-image-btn" onClick={handleImageRemove}>
@@ -72,7 +96,7 @@ const ImageBlock = ({ block, onUpdate, onRemove, attributes, listeners, setNodeR
           <div className="image-upload-area">
             <label className="upload-label">
               <FiUploadCloud size={24} />
-              <span>Chọn ảnh</span>
+              <span>Choose image</span>
               <input
                 type="file"
                 accept="image/*"
@@ -82,6 +106,36 @@ const ImageBlock = ({ block, onUpdate, onRemove, attributes, listeners, setNodeR
             </label>
           </div>
         )}
+        <div className="image-meta">
+          <label className="control-label" htmlFor={`image-alt-${block.id}`}>
+            Mô tả ảnh (alt)
+          </label>
+          <input
+            id={`image-alt-${block.id}`}
+            className={`control input ${isAltInvalid ? 'invalid' : ''}`}
+            type="text"
+            placeholder="Nhập mô tả ngắn cho ảnh"
+            value={altValue}
+            onChange={(e) => handleAltChange(e.target.value)}
+            disabled={!hasImage}
+          />
+          {isAltInvalid && <span className="field-hint">Cần nhập mô tả (alt) cho ảnh.</span>}
+        </div>
+        <div className="image-meta">
+          <label className="control-label" htmlFor={`image-caption-${block.id}`}>
+            Chú thích ảnh
+          </label>
+          <textarea
+            id={`image-caption-${block.id}`}
+            className={`control textarea ${isCaptionInvalid ? 'invalid' : ''}`}
+            rows={2}
+            placeholder="Thêm chú thích cho ảnh (không bắt buộc)"
+            value={captionValue}
+            onChange={(e) => handleCaptionChange(e.target.value)}
+            disabled={!hasImage}
+          />
+          {isCaptionInvalid && <span className="field-hint">Cần nhập chú thích cho ảnh.</span>}
+        </div>
       </div>
     </div>
   );
@@ -97,7 +151,7 @@ const SortableBlock = ({ id, children }) => {
   return children({ setNodeRef, style, attributes, listeners });
 };
 
-function BlockEditor({ blocks, setBlocks }) {
+function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
   const [openDropdownIndex, setOpenDropdownIndex] = useState(null);
   
 
@@ -127,22 +181,32 @@ function BlockEditor({ blocks, setBlocks }) {
       type,
       content: initialContent,
     };
-    setBlocks([...(blocks || []), newBlock]);
+    if (type === 'image') {
+      newBlock.alt = '';
+      newBlock.caption = '';
+    }
+    setBlocks((prev) => [...(prev || []), newBlock]);
+  };
+
+  const updateBlock = (index, updates) => {
+    setBlocks((prev) => {
+      const draft = [...(prev || [])];
+      if (!draft[index]) return draft;
+      draft[index] = { ...draft[index], ...updates };
+      return draft;
+    });
   };
 
   const setBlockContent = (index, contentValue) => {
-    const updated = [...blocks];
-    updated[index] = { ...updated[index], content: contentValue };
-    setBlocks(updated);
+    updateBlock(index, { content: contentValue });
   };
 
   const removeBlock = (index) => {
-    const updated = blocks.filter((_, i) => i !== index);
-    setBlocks(updated);
+    setBlocks((prev) => (prev || []).filter((_, i) => i !== index));
   };
 
-  const handleImageUpdate = (index, file) => {
-    setBlockContent(index, file);
+  const handleImageUpdate = (index, updates) => {
+    updateBlock(index, updates);
   };
 
   const onDragEnd = (event) => {
@@ -156,23 +220,26 @@ function BlockEditor({ blocks, setBlocks }) {
 
   return (
     <>
-      <div className="block-buttons ">
-        <button type="button" onClick={(e) => addBlock('heading', e)}>
-          Tiêu đề
-        </button>
-        <button type="button" onClick={(e) => addBlock('paragraph', e)}>
-          Đoạn văn
-        </button>
-        <button type="button" onClick={(e) => addBlock('image', e)}>
-          Hình ảnh
-        </button>
-        <button type="button" onClick={(e) => addBlock('list', e)}>
-          Danh sách
-        </button>
-      </div>
+      {showBlockButtons && (
+        <div className="block-buttons">
+          <button type="button" onClick={(e) => addBlock('heading', e)}>
+            Heading
+          </button>
+          <button type="button" onClick={(e) => addBlock('paragraph', e)}>
+            Paragraph
+          </button>
+          <button type="button" onClick={(e) => addBlock('image', e)}>
+            Image
+          </button>
+          <button type="button" onClick={(e) => addBlock('list', e)}>
+            List
+          </button>
+        </div>
+      )}
+
       <div className="block-editor">
         {blocks.length === 0 && (
-          <p className="empty">Chưa có nội dung nào. Hãy thêm block đầu tiên!</p>
+          <p className="empty">Chưa có nội dung. Thêm block đầu tiên!</p>
         )}
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
@@ -196,7 +263,7 @@ function BlockEditor({ blocks, setBlocks }) {
                         <div className="block-header">
                           <div className="left">
                             <FiType className="block-icon" />
-                            <span className="title">Heading</span>
+                            <span className="title">Tiêu đề</span>
                           </div>
                           <div
                             className="row"
@@ -246,7 +313,7 @@ function BlockEditor({ blocks, setBlocks }) {
                           <input
                             className="control input"
                             type="text"
-                            placeholder="Nhập tiêu đề..."
+                            placeholder="Nhập nội dung tiêu đề..."
                             value={value.text}
                             onChange={(e) =>
                               setBlockContent(idx, { ...value, text: e.target.value })
@@ -273,7 +340,7 @@ function BlockEditor({ blocks, setBlocks }) {
                         <div className="block-header">
                           <div className="left">
                             <FiAlignLeft className="block-icon" />
-                            <span className="title">Paragraph</span>
+                            <span className="title">Đoạn văn</span>
                           </div>
                           <div
                             className="row"
@@ -310,7 +377,7 @@ function BlockEditor({ blocks, setBlocks }) {
                         listeners={listeners}
                         setNodeRef={setNodeRef}
                         style={style}
-                        onUpdate={(file) => handleImageUpdate(idx, file)}
+                        onUpdate={(payload) => handleImageUpdate(idx, payload)}
                         onRemove={() => removeBlock(idx)}
                       />
                     )}
@@ -343,7 +410,7 @@ function BlockEditor({ blocks, setBlocks }) {
                         <div className="block-header">
                           <div className="left">
                             <FiList className="block-icon" />
-                            <span className="title">List</span>
+                            <span className="title">Danh sách</span>
                           </div>
                           <div
                             className="row"
