@@ -15,8 +15,7 @@ import {
   FiMoreHorizontal,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import axios from 'axios';
-
+import api from '../../api';
 import BlockEditor from '../BlockEditor/BlockEditor';
 
 import './PostForm.scss';
@@ -28,7 +27,7 @@ const blockLibrary = [
   { type: 'list', label: 'List', description: 'Create a bullet list', icon: FiList },
 ];
 
-const categories = [
+const initialCategories = [
   { value: 'highlight', label: 'Highlight' },
   { value: 'popular', label: 'Popular' },
   { value: 'green-life', label: 'Green Life' },
@@ -63,13 +62,44 @@ function PostForm() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [thumbnail, setThumbnail] = useState(null);
-  const [category, setCategory] = useState(categories[0].value);
+  const [categoryOptions, setCategoryOptions] = useState(initialCategories);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
+  const [isFetchingCategories, setIsFetchingCategories] = useState(false);
+  const [showCategoryError, setShowCategoryError] = useState(false);
   const [blocks, setBlocks] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSites, setSelectedSites] = useState([]);
   const [showTargetSiteError, setShowTargetSiteError] = useState(false);
   const [blockSearch, setBlockSearch] = useState('');
   const [activeInspectorTab, setActiveInspectorTab] = useState('post');
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setIsFetchingCategories(true);
+      try {
+        const response = await api.get('/api/v1/categories');
+        const categories = Array.isArray(response?.data?.data) ? response.data.data : [];
+        if (categories.length > 0) {
+          setCategoryOptions(categories);
+        } else {
+          setCategoryOptions(initialCategories);
+        }
+      } catch (error) {
+        console.error('Lỗi lấy danh sách chuyên mục:', error);
+        const message =
+          error?.response?.data?.message || 'Không thể tải danh sách chuyên mục.';
+        toast.error(message);
+        setCategoryOptions(initialCategories);
+      } finally {
+        setIsFetchingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   const thumbnailUrl = useMemo(
     () => (thumbnail ? URL.createObjectURL(thumbnail) : ''),
@@ -115,6 +145,64 @@ function PostForm() {
     setShowTargetSiteError(false);
   };
 
+  const handleCategoryToggle = (value) => {
+    setSelectedCategories((prev) => {
+      const exists = prev.includes(value);
+      const next = exists ? prev.filter((item) => item !== value) : [...prev, value];
+      if (showCategoryError && next.length > 0) setShowCategoryError(false);
+      return next;
+    });
+  };
+
+  const slugifyCategory = (input) => input
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) {
+      toast.error('Vui lòng nhập tên chuyên mục.');
+      return;
+    }
+    const slug = slugifyCategory(name) || name.toLowerCase();
+    if (categoryOptions.some((item) => item.value === slug)) {
+      toast.error('Chuyên mục đã tồn tại.');
+      return;
+    }
+    try {
+      setIsSavingCategory(true);
+      const response = await api.post('/api/v1/categories', { name });
+      const created = response?.data?.data;
+      if (!created || !created.value) {
+        throw new Error('Phản hồi không hợp lệ.');
+      }
+      setCategoryOptions((prev) => [...prev, created]);
+      setSelectedCategories((prev) => [...prev, created.value]);
+      setNewCategoryName('');
+      setIsAddingCategory(false);
+      setShowCategoryError(false);
+      toast.success('Thêm chuyên mục thành công.');
+    } catch (error) {
+      console.error('Lỗi thêm chuyên mục:', error);
+      const message =
+        error?.response?.data?.message || 'Không thể tạo chuyên mục mới.';
+      toast.error(message);
+    } finally {
+      setIsSavingCategory(false);
+    }
+  };
+
+  const handleNewCategoryKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddCategory();
+    }
+  };
+
   useEffect(() => {
     if (titleRef.current) {
       const element = titleRef.current;
@@ -134,11 +222,11 @@ function PostForm() {
     const trimmedDescription = description.trim();
 
     if (!trimmedTitle) {
-      toast.error('Thiếu tiêu đề.');
+      toast.error('Vui lòng nhập tiêu đề.');
       return;
     }
     if (!trimmedDescription) {
-      toast.error('Thiếu mô tả.');
+      toast.error('Vui lòng nhập mô tả.');
       return;
     }
     if (trimmedDescription.length > DESCRIPTION_LIMIT) {
@@ -146,16 +234,21 @@ function PostForm() {
       return;
     }
     if (!thumbnail) {
-      toast.error('Thiếu ảnh minh họa.');
+      toast.error('Vui lòng chọn ảnh đại diện.');
       return;
     }
     if (!blocks.length) {
-      toast.error('Thiếu nội dung.');
+      toast.error('Cần ít nhất một block nội dung.');
+      return;
+    }
+    if (selectedCategories.length === 0) {
+      setShowCategoryError(true);
+      toast.error('Chọn ít nhất một chuyên mục.');
       return;
     }
     if (selectedSites.length === 0) {
       setShowTargetSiteError(true);
-      toast.error('Chưa chọn website mục tiêu.');
+      toast.error('Chọn ít nhất một website đăng tin.');
       return;
     }
 
@@ -284,14 +377,14 @@ function PostForm() {
       });
 
       formData.append('content', JSON.stringify(processedBlocks));
-      formData.append('category', category);
+      formData.append('categories', JSON.stringify(selectedCategories));
       formData.append('author', 'Admin');
       formData.append(
         'targetSites',
         JSON.stringify(selectedSites.length > 0 ? selectedSites : availableSites.map((site) => site.url))
       );
 
-      const response = await axios.post('http://localhost:5000/api/v1/news/upload', formData, {
+      const response = await api.post('/api/v1/news/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -302,18 +395,23 @@ function PostForm() {
         setTitle('');
         setDescription('');
         setThumbnail(null);
-        setCategory(categories[0].value);
         setBlocks([]);
+        setSelectedCategories([]);
         setSelectedSites([]);
+        setShowCategoryError(false);
         setShowTargetSiteError(false);
       } else {
         toast.error(response.data.message || 'Có lỗi xảy ra.');
       }
     } catch (error) {
       console.error('Upload error:', error);
+      const status = error.response?.status;
       const serverMessage = error.response?.data?.message || '';
-      if (serverMessage.includes('E11000') || serverMessage.toLowerCase().includes('duplicate key')) {
-        toast.error('Tiêu đề đã tồn tại.');
+
+      if (status === 409) {
+        toast.error(serverMessage || 'Tiêu đề đã tồn tại.');
+      } else if (status === 422) {
+        toast.error(serverMessage || 'Dữ liệu không hợp lệ.');
       } else {
         toast.error(serverMessage || 'Không thể đăng tin tức.');
       }
@@ -336,6 +434,7 @@ function PostForm() {
 
   const trimmedDescriptionLength = description.trim().length;
   const isDescriptionTooLong = trimmedDescriptionLength > DESCRIPTION_LIMIT;
+  const hasNoCategorySelected = showCategoryError && selectedCategories.length === 0;
   const hasNoTargetSiteSelected = selectedSites.length === 0 && showTargetSiteError;
   const documentTitle = title.trim() || 'Không tiêu đề';
 
@@ -358,7 +457,7 @@ function PostForm() {
         </div>
         <div className="topbar__center">
           <span className="document-title">{documentTitle}</span>
-          <span className="document-type">Bài viết</span>
+          <span className="document-type">Bai viet</span>
           <span className="shortcut-hint">Ctrl + K</span>
         </div>
         <div className="topbar__right">
@@ -492,21 +591,73 @@ function PostForm() {
                   <span>Chuyên mục</span>
                   <FiChevronDown />
                 </header>
-                <div className="settings-card__body">
-                  {categories.map((item) => (
-                    <label key={item.value} className="checkbox-option">
-                      <input
-                        type="radio"
-                        name="post-category"
-                        value={item.value}
-                        checked={category === item.value}
-                        onChange={(e) => setCategory(e.target.value)}
-                      />
-                      <span>{item.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </section>
+                  <div className="settings-card__body">
+                    <div className={`checkbox-group ${hasNoCategorySelected ? 'is-invalid' : ''}`}>
+                      {categoryOptions.length > 0 &&
+                        categoryOptions.map((item) => (
+                          <label key={item.value} className="checkbox-option">
+                            <input
+                              type="checkbox"
+                              checked={selectedCategories.includes(item.value)}
+                              onChange={() => handleCategoryToggle(item.value)}
+                            />
+                            <span>{item.label}</span>
+                          </label>
+                        ))}
+                      {!isFetchingCategories && categoryOptions.length === 0 && (
+                        <span className="checkbox-empty">Chưa có chuyên mục nào.</span>
+                      )}
+                      {isFetchingCategories && (
+                        <span className="checkbox-hint checkbox-hint--muted">
+                          Đang tải danh sách chuyên mục...
+                        </span>
+                      )}
+                      {hasNoCategorySelected && (
+                        <span className="checkbox-hint">Chọn ít nhất một chuyên mục.</span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="category-add-toggle"
+                      onClick={() => {
+                        setIsAddingCategory((prev) => {
+                          const next = !prev;
+                          if (!next) setNewCategoryName('');
+                          return next;
+                        });
+                      }}
+                    >
+                      + Thêm chuyên mục
+                    </button>
+                    {isAddingCategory && (
+                      <div className="category-actions">
+                        <input
+                          type="text"
+                          placeholder="Nhập chuyên mục mới..."
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          onKeyDown={handleNewCategoryKeyDown}
+                        />
+                        <div className="category-actions__buttons">
+                          <button type="button" onClick={handleAddCategory} disabled={isSavingCategory}>
+                            {isSavingCategory ? 'Đang lưu...' : 'Thêm'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => {
+                              setIsAddingCategory(false);
+                              setNewCategoryName('');
+                            }}
+                            disabled={isSavingCategory}
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </section>
 
               <section className="settings-card">
                 <header className="settings-card__header">
