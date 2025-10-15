@@ -29,6 +29,7 @@ function LoginSuccess() {
         </div>
 
         <div className="user-info">
+          <div className="row"><span className="label">Họ tên</span><span className="value">{user.name || '—'}</span></div>
           <div className="row"><span className="label">Username</span><span className="value">{user.username}</span></div>
           <div className="row"><span className="label">Email</span><span className="value">{user.email}</span></div>
         </div>

@@ -11,26 +11,23 @@ import ProtectedRoute from './routes/ProtectedRoute';
 import PublicOnlyRoute from './routes/PublicOnlyRoute';
 
 function App() {
-  // Xác định trang hiện tại để ẩn/hiện Sidebar
   const location = useLocation();
-  const isLoginPage = location.pathname === '/login';      
-  const isRegisterPage = location.pathname === '/register'; 
-  const isLoginSuccessPage = location.pathname === '/login-success'; 
+  const isLoginPage = location.pathname === '/login';
+  const isRegisterPage = location.pathname === '/register';
+  const isLoginSuccessPage = location.pathname === '/login-success';
+  const isAuthPage = isLoginPage || isRegisterPage || isLoginSuccessPage;
 
   return (
-    // Giao diện chính của ứng dụng
     <div className="App">
-      {!(isLoginPage || isRegisterPage || isLoginSuccessPage) && <Sidebar />}
-      <main className="main-content">
-        <div className="container">
+      {!isAuthPage && <Sidebar />}
+      <main className={`main-content ${isAuthPage ? 'main-content--auth' : ''}`}>
+        <div className={`container ${isAuthPage ? 'container--auth' : ''}`}>
           <Routes>
-            {/* Chỉ vào khi CHƯA đăng nhập */}
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
             </Route>
 
-            {/* Các trang yêu cầu đăng nhập */}
             <Route element={<ProtectedRoute />}>
               <Route path="/login-success" element={<LoginSuccess />} />
               <Route path="/news" element={<News />} />
@@ -46,5 +43,3 @@ function App() {
 }
 
 export default App;
-
-

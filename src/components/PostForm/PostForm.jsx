@@ -1,20 +1,75 @@
-import { useMemo, useState, useRef } from 'react';
-import { FiUploadCloud, FiEdit2, FiEye } from 'react-icons/fi';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import {
+  FiEye,
+  FiSearch,
+  FiType,
+  FiAlignLeft,
+  FiImage,
+  FiList,
+  FiUploadCloud,
+  FiChevronDown,
+  FiCheck,
+  FiChevronLeft,
+  FiChevronRight,
+  FiRotateCcw,
+  FiMoreHorizontal,
+} from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
 import BlockEditor from '../BlockEditor/BlockEditor';
 
 import './PostForm.scss';
+
+const blockLibrary = [
+  { type: 'heading', label: 'Heading', description: 'Add a section title', icon: FiType },
+  { type: 'paragraph', label: 'Paragraph', description: 'Write rich text content', icon: FiAlignLeft },
+  { type: 'image', label: 'Image', description: 'Upload or insert a picture', icon: FiImage },
+  { type: 'list', label: 'List', description: 'Create a bullet list', icon: FiList },
+];
+
+const categories = [
+  { value: 'highlight', label: 'Highlight' },
+  { value: 'popular', label: 'Popular' },
+  { value: 'green-life', label: 'Green Life' },
+  { value: 'chat', label: 'Chat' },
+  { value: 'health', label: 'Health' },
+];
+
+const createBlock = (type) => {
+  const base = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    type,
+    content: null,
+  };
+
+  switch (type) {
+    case 'heading':
+      return { ...base, content: { level: 'H2', text: '' } };
+    case 'paragraph':
+      return { ...base, content: [{ text: '' }] };
+    case 'list':
+      return { ...base, content: [[{ text: '' }]] };
+    case 'image':
+      return { ...base, alt: '', caption: '' };
+    default:
+      return base;
+  }
+};
+
 function PostForm() {
+  const DESCRIPTION_LIMIT = 300;
+
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [thumbnail, setThumbnail] = useState(null);
-  const [category, setCategory] = useState('Tin tổng hợp');
+  const [category, setCategory] = useState(categories[0].value);
   const [blocks, setBlocks] = useState([]);
-  const [openCategory, setOpenCategory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedSites, setSelectedSites] = useState([]);
-  const [openSites, setOpenSites] = useState(false);
+  const [showTargetSiteError, setShowTargetSiteError] = useState(false);
+  const [blockSearch, setBlockSearch] = useState('');
+  const [activeInspectorTab, setActiveInspectorTab] = useState('post');
 
   const thumbnailUrl = useMemo(
     () => (thumbnail ? URL.createObjectURL(thumbnail) : ''),
@@ -22,107 +77,218 @@ function PostForm() {
   );
 
   const dropRef = useRef(null);
+  const titleRef = useRef(null);
 
-  // Danh sách các trang web
   const availableSites = [
     { id: 'vinhomecangio', name: 'Vinhomes Green Paradise', url: 'http://vinhomecangio.vn/' },
-    { id: 'thegioriverside', name: 'The Gió Riverside', url: 'http://angia.org.vn/' },
+    { id: 'thegioriverside', name: 'The Gio Riverside', url: 'http://angia.org.vn/' },
     { id: 'example', name: 'Example', url: 'http://example.com.vn/' },
   ];
 
-  const handleSiteToggle = (siteUrl) => {
-    setSelectedSites((prev) =>
-      prev.includes(siteUrl) ? prev.filter((url) => url !== siteUrl) : [...prev, siteUrl]
+  const filteredBlocks = useMemo(() => {
+    const query = blockSearch.trim().toLowerCase();
+    if (!query) return blockLibrary;
+    return blockLibrary.filter((item) =>
+      `${item.label} ${item.description}`.toLowerCase().includes(query)
     );
+  }, [blockSearch]);
+
+  const handleSiteToggle = (siteUrl) => {
+    setSelectedSites((prev) => {
+      const next = prev.includes(siteUrl)
+        ? prev.filter((url) => url !== siteUrl)
+        : [...prev, siteUrl];
+      if (showTargetSiteError && next.length > 0) {
+        setShowTargetSiteError(false);
+      }
+      return next;
+    });
   };
 
   const handleSelectAllSites = () => {
     setSelectedSites(availableSites.map((site) => site.url));
+    setShowTargetSiteError(false);
   };
 
   const handleDeselectAllSites = () => {
     setSelectedSites([]);
+    setShowTargetSiteError(false);
   };
+
+  useEffect(() => {
+    if (titleRef.current) {
+      const element = titleRef.current;
+      element.style.height = 'auto';
+      element.style.height = `${element.scrollHeight}px`;
+    }
+  }, [title]);
+
+  const handleAddBlock = useCallback((type) => {
+    setBlocks((prev) => [...prev, createBlock(type)]);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
-    if (!title.trim()) {
-      toast.error('Vui lòng nhập tiêu đề');
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+
+    if (!trimmedTitle) {
+      toast.error('Thiếu tiêu đề.');
+      return;
+    }
+    if (!trimmedDescription) {
+      toast.error('Thiếu mô tả.');
+      return;
+    }
+    if (trimmedDescription.length > DESCRIPTION_LIMIT) {
+      toast.error(`Mô tả không được vượt quá ${DESCRIPTION_LIMIT} ký tự.`);
       return;
     }
     if (!thumbnail) {
-      toast.error('Vui lòng chọn ảnh đại diện');
+      toast.error('Thiếu ảnh minh họa.');
       return;
     }
     if (!blocks.length) {
-      toast.error('Vui lòng thêm nội dung bài viết');
+      toast.error('Thiếu nội dung.');
+      return;
+    }
+    if (selectedSites.length === 0) {
+      setShowTargetSiteError(true);
+      toast.error('Chưa chọn website mục tiêu.');
+      return;
+    }
+
+    const hasMissingImageMeta = blocks.some((block) => {
+      if (!block || block.type !== 'image') return false;
+      const hasFile = block.content instanceof File;
+      const contentUrl =
+        typeof block.content === 'string' && block.content
+          ? block.content.trim()
+          : typeof block.url === 'string'
+          ? block.url.trim()
+          : '';
+      if (!hasFile && !contentUrl) return false;
+      const alt = (block.alt || '').trim();
+      const caption = (block.caption || '').trim();
+      return !alt || !caption;
+    });
+
+    if (hasMissingImageMeta) {
+      toast.error('Ảnh phải có mô tả (alt) và chú thích.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Create FormData for file upload
       const formData = new FormData();
-      formData.append('title', title.trim());
+      formData.append('title', trimmedTitle);
+      formData.append('description', trimmedDescription);
       formData.append('thumbnail', thumbnail);
 
-      // Xử lý blocks và tách file ảnh
       const processedBlocks = [];
       const imageFiles = [];
 
       blocks.forEach((block) => {
-        if (block.type === 'image' && block.content instanceof File) {
-          // Lưu file ảnh và thay content bằng tên file
-          imageFiles.push(block.content);
-          processedBlocks.push({
-            ...block,
-            content: block.content.name,
-          });
-        } else {
-          // Xử lý rich text cho paragraph và list
-          let processedBlock = { ...block };
-          
-          if (block.type === 'paragraph') {
-            // Đảm bảo paragraph có rich text format
-            if (Array.isArray(block.content)) {
-              processedBlock.content = block.content;
-            } else if (typeof block.content === 'string') {
-              processedBlock.content = [{ text: block.content }];
-            }
-          } else if (block.type === 'list') {
-            // Đảm bảo list items có rich text format
-            if (Array.isArray(block.content)) {
-              processedBlock.content = block.content.map(item => {
-                if (Array.isArray(item)) {
-                  return item;
-                } else if (typeof item === 'string') {
-                  return [{ text: item }];
-                }
-                return item;
-              });
-            }
+        if (!block) return;
+
+        if (block.type === 'image') {
+          const alt = (block.alt || '').trim();
+          const caption = (block.caption || '').trim();
+
+          if (block.content instanceof File) {
+            imageFiles.push(block.content);
+            processedBlocks.push({
+              type: 'image',
+              url: block.content.name,
+              alt,
+              caption,
+            });
+            return;
           }
-          
-          processedBlocks.push(processedBlock);
+
+          const existingUrl =
+            typeof block.content === 'string' && block.content
+              ? block.content.trim()
+              : typeof block.url === 'string'
+              ? block.url.trim()
+              : '';
+
+          processedBlocks.push({
+            type: 'image',
+            url: existingUrl,
+            alt,
+            caption,
+          });
+          return;
         }
+
+        if (block.type === 'heading') {
+          const value =
+            block.content && typeof block.content === 'object'
+              ? block.content
+              : { level: 'H2', text: '' };
+
+          processedBlocks.push({
+            type: 'heading',
+            level: (value.level || 'H2').toUpperCase(),
+            text: (value.text || '').trim(),
+          });
+          return;
+        }
+
+        if (block.type === 'paragraph') {
+          if (Array.isArray(block.content)) {
+            processedBlocks.push({
+              type: 'paragraph',
+              richText: block.content,
+              text: block.content.map((item) => item?.text || '').join('').trim(),
+            });
+          } else if (typeof block.content === 'string') {
+            processedBlocks.push({
+              type: 'paragraph',
+              text: block.content.trim(),
+            });
+          } else if (typeof block.text === 'string') {
+            processedBlocks.push({
+              type: 'paragraph',
+              text: block.text.trim(),
+            });
+          } else {
+            processedBlocks.push({ type: 'paragraph', text: '' });
+          }
+          return;
+        }
+
+        if (block.type === 'list') {
+          const items = Array.isArray(block.content) ? block.content : [];
+          const normalizedItems = items.map((item) => {
+            if (Array.isArray(item)) return item;
+            if (typeof item === 'string') return [{ text: item }];
+            if (Array.isArray(item?.richText)) return item.richText;
+            return [];
+          });
+          processedBlocks.push({
+            type: 'list',
+            items: normalizedItems,
+          });
+          return;
+        }
+
+        processedBlocks.push(block);
       });
 
-      // Thêm các file ảnh từ blocks
       imageFiles.forEach((file) => {
         formData.append('blockImages', file);
       });
 
-      formData.append('blocks', JSON.stringify(processedBlocks));
+      formData.append('content', JSON.stringify(processedBlocks));
       formData.append('category', category);
       formData.append('author', 'Admin');
       formData.append(
         'targetSites',
-        JSON.stringify(
-          selectedSites.length > 0 ? selectedSites : availableSites.map((site) => site.url)
-        )
+        JSON.stringify(selectedSites.length > 0 ? selectedSites : availableSites.map((site) => site.url))
       );
 
       const response = await axios.post('http://localhost:5000/api/v1/news/upload', formData, {
@@ -132,19 +298,25 @@ function PostForm() {
       });
 
       if (response.data.success) {
-        toast.success('Đăng tin tức thành công!');
-        // Reset form
+        toast.success('Đăng tin tức thành công.');
         setTitle('');
+        setDescription('');
         setThumbnail(null);
-        setCategory('Tin tổng hợp');
+        setCategory(categories[0].value);
         setBlocks([]);
         setSelectedSites([]);
+        setShowTargetSiteError(false);
       } else {
-        toast.error(response.data.message || 'Có lỗi xảy ra');
+        toast.error(response.data.message || 'Có lỗi xảy ra.');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error(error.response?.data?.message || 'Có lỗi xảy ra khi đăng tin');
+      const serverMessage = error.response?.data?.message || '';
+      if (serverMessage.includes('E11000') || serverMessage.toLowerCase().includes('duplicate key')) {
+        toast.error('Tiêu đề đã tồn tại.');
+      } else {
+        toast.error(serverMessage || 'Không thể đăng tin tức.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -162,134 +334,265 @@ function PostForm() {
     e.stopPropagation();
   };
 
+  const trimmedDescriptionLength = description.trim().length;
+  const isDescriptionTooLong = trimmedDescriptionLength > DESCRIPTION_LIMIT;
+  const hasNoTargetSiteSelected = selectedSites.length === 0 && showTargetSiteError;
+  const documentTitle = title.trim() || 'Không tiêu đề';
+
   return (
-    <form className="post-form" onSubmit={handleSubmit}>
-      <div className="page-header">
-        <div>
-          <h1>Đăng tin tức mới</h1>
-          <p className="subtitle">Tạo và xem trước tin tức trước khi đăng</p>
-        </div>
-        <div className="actions">
-          <button type="button" className="btn outline">
-            <FiEdit2 /> Chỉnh sửa
-          </button>
-          <button type="button" className="btn outline">
-            <FiEye /> Xem trước
-          </button>
-        </div>
-      </div>
-      <label>Tiêu đề *</label>
-      <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
-
-      <label>Danh mục *</label>
-      <div className="dropdown" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          className="dropdown-toggle control"
-          onClick={() => setOpenCategory(!openCategory)}
-        >
-          {category}
-        </button>
-        {openCategory && (
-          <div className="dropdown-menu" onMouseLeave={() => setOpenCategory(false)}>
-            {['Tin tổng hợp', 'Thông cáo', 'Sự kiện'].map((opt) => (
-              <div
-                key={opt}
-                className={`dropdown-item ${opt === category ? 'active' : ''}`}
-                onClick={() => {
-                  setCategory(opt);
-                  setOpenCategory(false);
-                }}
-              >
-                {opt}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <label>Chọn trang web đăng tin *</label>
-      <div className="dropdown" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          className="dropdown-toggle control"
-          onClick={() => setOpenSites(!openSites)}
-        >
-          {selectedSites.length === 0
-            ? 'Tất cả trang web'
-            : selectedSites.length === availableSites.length
-            ? 'Tất cả trang web'
-            : `${selectedSites.length} trang web đã chọn`}
-        </button>
-        {openSites && (
-          <div className="dropdown-menu sites-menu" onMouseLeave={() => setOpenSites(false)}>
-            <div className="dropdown-actions">
-              <button type="button" className="action-btn" onClick={handleSelectAllSites}>
-                Chọn tất cả
-              </button>
-              <button type="button" className="action-btn" onClick={handleDeselectAllSites}>
-                Bỏ chọn tất cả
-              </button>
-            </div>
-            {availableSites.map((site) => (
-              <div
-                key={site.id}
-                className={`dropdown-item ${selectedSites.includes(site.url) ? 'active' : ''}`}
-                onClick={() => handleSiteToggle(site.url)}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedSites.includes(site.url)}
-                  onChange={() => {}} // Controlled by onClick
-                />
-                <span>{site.name}</span>
-                <small>({site.url})</small>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <label>Ảnh đại diện *</label>
-      <div
-        ref={dropRef}
-        className={`dropzone ${thumbnail ? 'has-file' : ''}`}
-        onDrop={onDrop}
-        onDragOver={prevent}
-        onDragEnter={prevent}
-        onDragLeave={prevent}
-      >
-        {thumbnail ? (
-          <>
-            <img className="drop-cover" src={thumbnailUrl} alt="thumbnail preview" />
-            <button type="button" className="clear-overlay" onClick={() => setThumbnail(null)}>
-              X
+    <form className="wp-editor" onSubmit={handleSubmit}>
+      <header className="wp-editor__topbar">
+        <div className="topbar__left">
+          <button type="button" className="bar-btn logo">W</button>
+          <div className="bar-btn-group">
+            <button type="button" className="bar-btn icon">
+              <FiChevronLeft />
             </button>
-          </>
-        ) : (
-          <div className="empty-state">
-            <FiUploadCloud size={56} />
-            <p>Kéo & thả ảnh vào đây hoặc</p>
-            <label className="file-btn">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setThumbnail(e.target.files[0])}
-              />
-              Tải ảnh lên
-            </label>
+            <button type="button" className="bar-btn icon">
+              <FiChevronRight />
+            </button>
+            <button type="button" className="bar-btn icon">
+              <FiRotateCcw />
+            </button>
           </div>
-        )}
+        </div>
+        <div className="topbar__center">
+          <span className="document-title">{documentTitle}</span>
+          <span className="document-type">Bài viết</span>
+          <span className="shortcut-hint">Ctrl + K</span>
+        </div>
+        <div className="topbar__right">
+          <span className="autosave">Lưu tự động</span>
+          <button type="button" className="bar-btn text">Lưu bản nháp</button>
+          <button type="button" className="bar-btn text">
+            <FiEye /> Xem thử
+          </button>
+          <button type="submit" className="bar-btn primary" disabled={isSubmitting}>
+            {isSubmitting ? 'Đang đăng...' : 'Đăng bài'}
+          </button>
+          <button type="button" className="bar-btn icon">
+            <FiMoreHorizontal />
+          </button>
+        </div>
+      </header>
+
+      <div className="wp-editor__workspace">
+        <aside className="wp-editor__inserter">
+          <div className="inserter__tabs">
+            <button type="button" className="is-active">Blocks</button>
+            <button type="button">Patterns</button>
+            <button type="button">Media</button>
+          </div>
+          <div className="inserter__search">
+            <FiSearch />
+            <input
+              type="text"
+              placeholder="Tìm block"
+              value={blockSearch}
+              onChange={(e) => setBlockSearch(e.target.value)}
+            />
+          </div>
+          <p className="inserter__caption">Chọn block để thêm vào trang</p>
+          <div className="inserter__list">
+            {filteredBlocks.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  type="button"
+                  key={item.type}
+                  className="inserter__item"
+                  onClick={() => handleAddBlock(item.type)}
+                >
+                  <span className="item__icon">
+                    <Icon size={18} />
+                  </span>
+                  <span className="item__meta">
+                    <span className="item__label">{item.label}</span>
+                    <span className="item__hint">{item.description}</span>
+                  </span>
+                </button>
+              );
+            })}
+            {filteredBlocks.length === 0 && (
+              <p className="inserter__empty">Không tìm thấy block phù hợp.</p>
+            )}
+          </div>
+        </aside>
+
+        <main className="wp-editor__canvas">
+          <div className="canvas__wrapper">
+            <div className="canvas__title">
+              <textarea
+                ref={titleRef}
+                placeholder="Thêm tiêu đề..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                rows={1}
+              />
+            </div>
+            <div className={`canvas__description ${isDescriptionTooLong ? 'is-invalid' : ''}`}>
+              <textarea
+                placeholder="Viết phần mô tả ngắn (tối đa 300 ký tự)..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+              />
+              <div className="description__meta">
+                <span className="description__hint">
+                  Đoạn mô tả xuất hiện ở danh sách bài viết và giúp người đọc nắm nhanh nội dung.
+                </span>
+                <span className="char-counter">
+                  {trimmedDescriptionLength}/{DESCRIPTION_LIMIT}
+                </span>
+              </div>
+            </div>
+            <BlockEditor blocks={blocks} setBlocks={setBlocks} showBlockButtons={false} />
+            <div className="canvas__hint">Gõ / để mở danh sách block</div>
+          </div>
+        </main>
+
+        <aside className="wp-editor__inspector">
+          <div className="inspector__tabs">
+            <button
+              type="button"
+              className={`inspector__tab ${activeInspectorTab === 'post' ? 'is-active' : ''}`}
+              onClick={() => setActiveInspectorTab('post')}
+            >
+              Bài viết
+            </button>
+            <button
+              type="button"
+              className={`inspector__tab ${activeInspectorTab === 'block' ? 'is-active' : ''}`}
+              onClick={() => setActiveInspectorTab('block')}
+            >
+              Block
+            </button>
+          </div>
+
+          {activeInspectorTab === 'post' ? (
+            <div className="inspector__content">
+              <section className="settings-card">
+                <header className="settings-card__header">
+                  <span>Trạng thái & hiển thị</span>
+                  <FiChevronDown />
+                </header>
+                <div className="settings-card__body">
+                  <p className="settings-card__text">
+                    Bản nháp chỉ hiển thị với đội biên tập. Đăng bài khi bạn sẵn sàng.
+                  </p>
+                  <div className="status-pill">
+                    <FiCheck size={14} />
+                    <span>Bản nháp đã được lưu gần đây</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-card">
+                <header className="settings-card__header">
+                  <span>Chuyên mục</span>
+                  <FiChevronDown />
+                </header>
+                <div className="settings-card__body">
+                  {categories.map((item) => (
+                    <label key={item.value} className="checkbox-option">
+                      <input
+                        type="radio"
+                        name="post-category"
+                        value={item.value}
+                        checked={category === item.value}
+                        onChange={(e) => setCategory(e.target.value)}
+                      />
+                      <span>{item.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section className="settings-card">
+                <header className="settings-card__header">
+                  <span>Website đăng tin</span>
+                  <FiChevronDown />
+                </header>
+                <div className="settings-card__body">
+                  <div className="settings-actions">
+                    <button type="button" onClick={handleSelectAllSites}>
+                      Chọn tất cả
+                    </button>
+                    <button type="button" onClick={handleDeselectAllSites}>
+                      Bỏ chọn
+                    </button>
+                  </div>
+                  <div className={`checkbox-group ${hasNoTargetSiteSelected ? 'is-invalid' : ''}`}>
+                    {availableSites.map((site) => (
+                      <label key={site.id} className="checkbox-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedSites.includes(site.url)}
+                          onChange={() => handleSiteToggle(site.url)}
+                        />
+                        <span>
+                          {site.name}
+                          <small>{site.url}</small>
+                        </span>
+                      </label>
+                    ))}
+                    {hasNoTargetSiteSelected && (
+                      <span className="checkbox-hint">
+                        Chọn ít nhất một site để đăng tin.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="settings-card">
+                <header className="settings-card__header">
+                  <span>Ảnh đại diện</span>
+                  <FiChevronDown />
+                </header>
+                <div
+                  ref={dropRef}
+                  className={`featured-drop ${thumbnail ? 'has-image' : ''}`}
+                  onDrop={onDrop}
+                  onDragOver={prevent}
+                  onDragEnter={prevent}
+                  onDragLeave={prevent}
+                >
+                  {thumbnail ? (
+                    <>
+                      <img src={thumbnailUrl} alt="thumbnail preview" />
+                      <button
+                        type="button"
+                        className="remove-image"
+                        onClick={() => setThumbnail(null)}
+                      >
+                        Xóa ảnh
+                      </button>
+                    </>
+                  ) : (
+                    <div className="drop-inner">
+                      <FiUploadCloud size={40} />
+                      <p>Kéo ảnh vào đây hoặc</p>
+                      <label className="upload-btn">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setThumbnail(e.target.files[0])}
+                        />
+                        Chọn ảnh
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : (
+            <div className="inspector__placeholder">
+              Chọn block trong trình soạn thảo để xem thiết lập.
+            </div>
+          )}
+        </aside>
       </div>
-
-      <label>Nội dung bài viết</label>
-      <BlockEditor blocks={blocks} setBlocks={setBlocks} />
-
-      <button type="submit" className="submit-btn" disabled={isSubmitting}>
-        {isSubmitting ? 'Đang đăng...' : 'Đăng tin tức'}
-      </button>
-
-      {/* <PreviewModal /> */}
     </form>
   );
 }

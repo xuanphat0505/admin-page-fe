@@ -1,11 +1,16 @@
-﻿
-.login-container {
-  min-height: 100vh;
+﻿.login-container {
+  height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
-  padding: 24px 12px;
+  padding: 20px 16px;
+  box-sizing: border-box;
+}
+@supports (height: 100dvh) {
+  .login-container {
+    height: 100dvh;
+  }
 }
 
 .login-box {
@@ -13,8 +18,27 @@
   border-radius: 16px;
   padding: 28px 22px 22px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  width: 100%;
-  min-width: 420px;
+  width: min(90vw, 340px);
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 16px 12px;
+  }
+  .login-box {
+    width: 92vw;
+    padding: 24px 18px 20px;
+    border-radius: 14px;
+  }
+  .login-title {
+    font-size: 24px;
+  }
+  .input-group {
+    height: 44px;
+  }
+  .login-btn {
+    height: 42px;
+  }
 }
 
 .login-title {

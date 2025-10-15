@@ -30,7 +30,11 @@ const LoginForm = () => {
       const response = await axios.post(
         LOGIN_URL,
         JSON.stringify({ user, pwd }),
-        { headers: { 'Content-Type': 'application/json' }, withCredentials: true }  
+        {
+          headers: { 'Content-Type': 'application/json' },
+          withCredentials: true,
+          skipAuthRedirect: true,
+        },
       ) // withCredentials: true để gửi cookie (nếu có)
 
       // Lấy thông tin user từ response
@@ -41,13 +45,16 @@ const LoginForm = () => {
       navigate('/login-success', { replace: true })
     } catch (err) {
       // Xử lý lỗi
-      if (!err?.response) 
+      const apiMsg = err?.response?.data?.message
+      if (apiMsg)
+        setErrMsg(apiMsg)
+      else if (!err?.response)
         setErrMsg('Không có phản hồi từ máy chủ')
-      else if (err.response?.status === 400) 
+      else if (err.response?.status === 400)
         setErrMsg('Thiếu tên đăng nhập hoặc mật khẩu')
-      else if (err.response?.status === 401) 
+      else if (err.response?.status === 401)
         setErrMsg('Không được phép')
-      else 
+      else
         setErrMsg('Đăng nhập thất bại')
       errRef.current?.focus()
     }

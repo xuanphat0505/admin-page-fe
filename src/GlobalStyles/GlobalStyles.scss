@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
 * {
   margin: 0;
   padding: 0;
@@ -80,4 +80,19 @@ a {
     max-width: 100%;
   }
 }
+
+
+.main-content--auth {
+  padding: 0;
+  justify-content: center;
+}
+
+.container--auth {
+  max-width: none;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+
 

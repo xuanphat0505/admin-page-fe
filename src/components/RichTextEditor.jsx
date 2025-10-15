@@ -1,10 +1,15 @@
 import { useState, useRef } from 'react';
 import { FiBold, FiItalic, FiLink, FiX } from 'react-icons/fi';
 
+const FONT_SIZE_PRESETS = ['12', '14', '16', '18', '20', '24', '28', '32'];
+const MIN_FONT_PX = 8;
+const MAX_FONT_PX = 96;
+
 function RichTextEditor({ value, onChange, placeholder = "Nhập nội dung..." }) {
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [selectedText, setSelectedText] = useState('');
+  const [pendingFont, setPendingFont] = useState('');
   const textareaRef = useRef(null);
 
   // Convert rich text array to display text
@@ -77,6 +82,80 @@ function RichTextEditor({ value, onChange, placeholder = "Nhập nội dung..." 
     }, 0);
   };
 
+  const applyFontSize = (size) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    let selectionStart = start;
+    let selectionEnd = end;
+    let selected = textarea.value.substring(start, end);
+
+    if (!selected) {
+      selected = textarea.value;
+      selectionStart = 0;
+      selectionEnd = textarea.value.length;
+    }
+
+    if (!selected) {
+      return;
+    }
+
+    const fontWrapped = size
+      ? `<span style="font-size:${size}">${selected}</span>`
+      : selected;
+
+    const newText =
+      textarea.value.substring(0, selectionStart) +
+      fontWrapped +
+      textarea.value.substring(selectionEnd);
+
+    onChange(displayToRichText(newText));
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(
+        selectionStart + fontWrapped.length,
+        selectionStart + fontWrapped.length,
+      );
+    }, 0);
+  };
+
+  const normalizeFontSizeInput = (raw) => {
+    if (raw === undefined || raw === null) return null;
+    const trimmed = String(raw).trim();
+    if (!trimmed) return '';
+
+    const numberOnly = trimmed.replace(',', '.');
+    const numericPattern = /^(\d+)(\.\d+)?$/;
+    const cssPattern = /^(\d+(\.\d+)?)(px|pt|em|rem|%)$/i;
+
+    if (numericPattern.test(numberOnly)) {
+      const value = Math.min(Math.max(parseFloat(numberOnly), MIN_FONT_PX), MAX_FONT_PX);
+      return `${Number.isInteger(value) ? value : value.toFixed(1)}px`;
+    }
+    if (cssPattern.test(trimmed)) {
+      return trimmed.toLowerCase();
+    }
+    return null;
+  };
+
+  const toDisplayValue = (normalized) => {
+    if (!normalized) return '';
+    if (normalized.endsWith('px')) return normalized.replace(/px$/, '');
+    return normalized;
+  };
+
+  const commitFontSize = (raw) => {
+    const normalized = normalizeFontSizeInput(raw);
+    if (normalized === null) {
+      alert('Kích cỡ không hợp lệ. Vui lòng nhập số (ví dụ 18) hoặc đơn vị hợp lệ như 18px, 1.2rem.');
+      return;
+    }
+    applyFontSize(normalized);
+    setPendingFont(toDisplayValue(normalized));
+  };
+
   const insertLink = () => {
     if (!linkUrl || !selectedText) return;
 
@@ -126,6 +205,36 @@ function RichTextEditor({ value, onChange, placeholder = "Nhập nội dung..." 
         >
           <FiLink />
         </button>
+        <div className="toolbar-font-size">
+          <input
+            type="text"
+            className="toolbar-input"
+            list="font-size-options"
+            inputMode="decimal"
+            value={pendingFont}
+            placeholder="Cỡ"
+            onChange={(e) => {
+              const next = e.target.value;
+              setPendingFont(next);
+              // nếu giá trị khớp preset -> áp dụng ngay
+              if (FONT_SIZE_PRESETS.includes(next.trim())) {
+                commitFontSize(next);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commitFontSize(pendingFont);
+              }
+            }}
+            onBlur={() => commitFontSize(pendingFont)}
+          />
+          <datalist id="font-size-options">
+            {FONT_SIZE_PRESETS.map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        </div>
       </div>
       
       <textarea
@@ -139,8 +248,8 @@ function RichTextEditor({ value, onChange, placeholder = "Nhập nội dung..." 
 
       <div className="format-help">
         <small>
-          💡 Chọn văn bản và nhấn nút định dạng, hoặc sử dụng HTML: 
-          <code>&lt;strong&gt;</code>, <code>&lt;em&gt;</code>, <code>&lt;a href="..."&gt;</code>
+          💡 Chọn văn bản và nhấn nút định dạng, dùng ô “Cỡ” để nhập số (ví dụ 18) hoặc HTML: 
+          <code>&lt;strong&gt;</code>, <code>&lt;em&gt;</code>, <code>&lt;a href="..."&gt;</code>, <code>&lt;span style="font-size:18px"&gt;</code>
         </small>
       </div>
 
