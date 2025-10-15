@@ -542,6 +542,105 @@
     }
   }
 
+  .category-add-toggle {
+    margin-top: 0.75rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #1d4ed8;
+    font-weight: 600;
+    font-size: 0.85rem;
+    align-self: flex-start;
+    cursor: pointer;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: #1b3fad;
+      text-decoration: underline;
+    }
+
+    &:disabled {
+      color: #94a3b8;
+      cursor: not-allowed;
+      text-decoration: none;
+    }
+  }
+
+  .category-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 10px;
+    border: 1px dashed #cbd5f5;
+    background: #f8fafc;
+
+    input {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.85rem;
+      color: #111827;
+      background: #ffffff;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+      &:focus {
+        outline: none;
+        border-color: #2563eb;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+      }
+    }
+
+    &__buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+
+      button {
+        padding: 0.45rem 0.95rem;
+        border-radius: 8px;
+        border: 1px solid #1d4ed8;
+        background: #1d4ed8;
+        color: #ffffff;
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+
+        &:hover {
+          background: #1b3fad;
+          border-color: #1b3fad;
+        }
+
+        &:disabled {
+          background: #93c5fd;
+          border-color: #93c5fd;
+          cursor: not-allowed;
+          opacity: 0.85;
+        }
+      }
+
+      .btn-secondary {
+        border: 1px solid #cbd5f5;
+        background: #ffffff;
+        color: #1f2937;
+
+        &:hover {
+          background: #e5edff;
+          border-color: #b4c3ff;
+        }
+
+        &:disabled {
+          background: #f1f5f9;
+          border-color: #e2e8f0;
+          color: #94a3b8;
+          cursor: not-allowed;
+        }
+      }
+    }
+  }
+
   .checkbox-group {
     display: flex;
     flex-direction: column;
@@ -560,6 +659,17 @@
       font-size: 0.78rem;
       color: #dc2626;
       font-weight: 500;
+
+      &.checkbox-hint--muted {
+        color: #64748b;
+        font-weight: 400;
+      }
+    }
+
+    .checkbox-empty {
+      font-size: 0.82rem;
+      color: #475569;
+      font-style: italic;
     }
   }
 
