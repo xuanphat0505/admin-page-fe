@@ -1,98 +1,120 @@
-/* Rich Text Editor Styles */
 .rich-text-editor {
   position: relative;
 }
 
 .toolbar {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 8px;
-  padding: 8px;
+  padding: 8px 10px;
   background: #f8f9fa;
   border: 1px solid #e9ecef;
-  border-radius: 4px 4px 0 0;
+  border-radius: 8px 8px 0 0;
   border-bottom: none;
 }
 
 .toolbar-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid #dee2e6;
-  background: white;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: #495057;
-}
-
-.toolbar-font-size {
-  display: flex;
-  align-items: center;
-  margin-left: 4px;
-}
-
-.toolbar-input {
-  height: 32px;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  padding: 0 8px;
+  border: 1px solid #d0d5dd;
   background: #ffffff;
-  color: #495057;
-  font-size: 14px;
-  width: 64px;
-  text-align: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  color: #475467;
 }
 
-.toolbar-input:focus {
+.toolbar-btn:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+}
+
+/* Active state for toolbar buttons (when format is applied) */
+.toolbar-btn.is-active {
+  /* stronger active appearance: solid blue background with white icon for clearer affordance */
+  background: #1d4ed8;
+  border-color: #1e40af;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(29, 78, 216, 0.18);
+}
+
+/* Keep hover visible even when active (slightly darker) */
+.toolbar-btn.is-active:hover {
+  background: #1742b2;
+  border-color: #15358f;
+  color: #ffffff;
+}
+
+/* Make link elements inside the editor visually distinct so users can spot them */
+.rich-editor a {
+  color: #1d4ed8; /* primary blue */
+  text-decoration: underline;
+  background: transparent;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.rich-editor a:hover {
+  color: #0ea5e9; /* lighter cyan on hover */
+  text-decoration: underline;
+}
+
+/* font-size controls removed */
+
+.rich-editor {
+  border: 1px solid #d0d5dd;
+  border-radius: 0 0 8px 8px;
+  min-height: 120px;
+  padding: 12px 14px;
+  background: #ffffff;
+  font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #1f2937;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rich-editor:focus {
   outline: none;
   border-color: #6366f1;
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
-.toolbar-btn:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.toolbar-btn:active {
-  background: #dee2e6;
-}
-
-.rich-textarea {
-  border-radius: 0 0 4px 4px !important;
-  border-top: none !important;
-  resize: vertical;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  line-height: 1.5;
+.rich-editor[contenteditable='true']:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
 }
 
 .format-help {
   margin-top: 8px;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  border-left: 3px solid #007bff;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 3px solid #2563eb;
+  color: #475467;
+  font-size: 13px;
 }
 
 .format-help code {
-  background: #e9ecef;
+  background: #e2e8f0;
   padding: 2px 4px;
-  border-radius: 2px;
-  font-size: 0.875em;
-  color: #e83e8c;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #2563eb;
 }
 
-/* Link Dialog */
 .link-dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,12 +122,10 @@
 }
 
 .link-dialog {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+  width: min(480px, 92vw);
   overflow: hidden;
 }
 
@@ -114,114 +134,131 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #e9ecef;
-  background: #f8f9fa;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
 }
 
 .dialog-header h4 {
   margin: 0;
-  color: #495057;
+  font-size: 16px;
+  color: #1f2937;
 }
 
 .close-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
   border: none;
-  background: none;
-  border-radius: 4px;
+  border-radius: 6px;
+  background: transparent;
   cursor: pointer;
-  color: #6c757d;
-  transition: all 0.2s;
+  color: #6b7280;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .close-btn:hover {
-  background: #e9ecef;
-  color: #495057;
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .dialog-body {
   padding: 20px;
-}
-
-.dialog-body p {
-  margin: 0 0 16px 0;
-  color: #495057;
+  color: #334155;
+  font-size: 14px;
 }
 
 .dialog-body label {
   display: block;
   margin-bottom: 8px;
-  font-weight: 500;
-  color: #495057;
+  font-weight: 600;
 }
 
 .dialog-footer {
   display: flex;
-  gap: 12px;
   justify-content: flex-end;
+  gap: 10px;
   padding: 16px 20px;
-  border-top: 1px solid #e9ecef;
-  background: #f8f9fa;
+  border-top: 1px solid #e5e7eb;
+  background: #f8fafc;
 }
 
-/* List Item Rich Text */
-.list-item-editor {
-  position: relative;
+.rich-text-editor--compact .toolbar {
+  padding: 6px 8px;
+  gap: 4px;
+  margin-bottom: 6px;
 }
 
-.list-item-editor .toolbar {
-  margin-bottom: 4px;
-  padding: 4px 8px;
-  background: #f1f3f4;
-}
-
-.list-item-editor .toolbar-btn {
-  width: 24px;
-  height: 24px;
+.rich-text-editor--compact .toolbar-btn {
+  width: 26px;
+  height: 26px;
   font-size: 12px;
 }
 
-.list-item-editor .rich-textarea {
-  border-radius: 4px !important;
-  border: 1px solid #ced4da !important;
-  min-height: 40px;
-  resize: none;
+/* font-size controls removed */
+
+.rich-editor--compact {
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.rich-editor--compact:focus {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.list-item-editor .rich-text-editor {
+  margin-bottom: 0;
 }
 
 .list-item-editor .format-help {
   display: none;
 }
 
-/* Responsive */
+.image-overlay-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #cbd5f5;
+  border-radius: 12px;
+  color: #64748b;
+  background: #f8fafc;
+  padding: 1.5rem;
+  min-height: 140px;
+}
+
+.list-preview-item {
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  font-size: 0.9rem;
+  color: #1f2937;
+  margin-bottom: 0.45rem;
+}
+
+.list-preview-item:last-child {
+  margin-bottom: 0;
+}
+
+.list-preview-item.empty {
+  font-style: italic;
+  color: #94a3b8;
+}
+
 @media (max-width: 768px) {
-  .link-dialog {
-    width: 95%;
-    margin: 20px;
-  }
-  
-  .dialog-body {
-    padding: 16px;
-  }
-  
-  .dialog-footer {
-    padding: 12px 16px;
-  }
-  
   .toolbar {
-    padding: 6px;
-  }
-  
-  .toolbar-btn {
-    width: 28px;
-    height: 28px;
+    flex-wrap: wrap;
+    padding: 6px 8px;
   }
 
-  .toolbar-input {
-    height: 28px;
-    font-size: 13px;
-    width: 56px;
+  .toolbar-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .rich-editor {
+    min-height: 100px;
   }
 }

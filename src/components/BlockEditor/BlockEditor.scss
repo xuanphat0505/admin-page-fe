@@ -54,12 +54,28 @@
       border-radius: 14px;
       padding: 1.35rem 1.45rem;
       box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
+
+      &.is-sortable {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      &.is-placeholder {
+        pointer-events: none;
+      }
+
+      &.drag-overlay {
+        pointer-events: none;
+        box-shadow: 0 24px 48px rgba(29, 78, 216, 0.22);
+        border-color: #93c5fd;
+        opacity: 1 !important;
+      }
     }
 
     .block-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      cursor: default;
 
       .left {
         display: flex;
@@ -72,6 +88,12 @@
           color: #1d4ed8;
           font-size: 1.1rem;
         }
+      }
+
+      .header-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
       }
 
       .pill {
@@ -99,6 +121,27 @@
             background: #1d4ed8;
             color: #ffffff;
           }
+        }
+
+        &.handle {
+          background: #e2e8f0;
+          color: #1f2937;
+          cursor: grab;
+
+          &:hover {
+            background: #cbd5f5;
+            color: #1d4ed8;
+          }
+
+          &:active {
+            cursor: grabbing;
+          }
+        }
+
+        &.disabled {
+          cursor: default;
+          pointer-events: none;
+          opacity: 0.6;
         }
       }
     }
@@ -155,6 +198,32 @@
         .field-hint {
           font-size: 0.78rem;
           color: #dc2626;
+        }
+      }
+
+      .image-overlay-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px dashed #cbd5f5;
+        border-radius: 12px;
+        padding: 1.75rem;
+        color: #64748b;
+        background: #f8fafc;
+        min-height: 160px;
+      }
+
+      .list-preview-item {
+        padding: 0.65rem 0.85rem;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        font-size: 0.85rem;
+        color: #1f2937;
+
+        &.empty {
+          font-style: italic;
+          color: #94a3b8;
         }
       }
 
