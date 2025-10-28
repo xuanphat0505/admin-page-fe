@@ -1,273 +1,294 @@
-import { useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiBold, FiItalic, FiLink, FiX } from 'react-icons/fi';
 
-const FONT_SIZE_PRESETS = ['12', '14', '16', '18', '20', '24', '28', '32'];
-const MIN_FONT_PX = 8;
-const MAX_FONT_PX = 96;
+const stripHtml = (input = '') => input.replace(/<(?:.|\n)*?>/gm, ' ').replace(/\s+/g, ' ').trim();
 
-function RichTextEditor({ value, onChange, placeholder = "Nhập nội dung..." }) {
+const valueToHtml = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    const first = value[0];
+    if (!first) return '';
+    if (typeof first === 'string') return first;
+    if (typeof first?.html === 'string') return first.html;
+    if (typeof first?.text === 'string') return first.text;
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (typeof item?.html === 'string') return item.html;
+        if (typeof item?.text === 'string') return item.text;
+        return '';
+      })
+      .join('');
+  }
+  if (typeof value === 'object') {
+    if (typeof value.html === 'string') return value.html;
+    if (typeof value.text === 'string') return value.text;
+  }
+  return '';
+};
+
+const queryCommandStateSafe = (command) => {
+  try {
+    return document.queryCommandState(command);
+  } catch {
+    return false;
+  }
+};
+
+const isNodeInsideLink = (node) => {
+  if (!node) return false;
+  if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'A') return true;
+  return Boolean(node.parentElement?.closest('a'));
+};
+
+function RichTextEditor({
+  value,
+  onChange,
+  placeholder = 'Nhập nội dung...',
+  variant = 'default',
+  showFormatHelp = true,
+}) {
+  const editorRef = useRef(null);
+  const savedRangeRef = useRef(null);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [selectedText, setSelectedText] = useState('');
-  const [pendingFont, setPendingFont] = useState('');
-  const textareaRef = useRef(null);
+  const [activeFormats, setActiveFormats] = useState({
+    bold: false,
+    italic: false,
+    link: false,
+  });
 
-  // Convert rich text array to display text
-  const richTextToDisplay = (richTextArray) => {
-    if (!Array.isArray(richTextArray)) return richTextArray || '';
-    return richTextArray.map(item => {
-      if (typeof item === 'string') return item;
-      return item.text || '';
-    }).join('');
-  };
+  const htmlValue = useMemo(() => valueToHtml(value), [value]);
 
-  // Convert display text to rich text array
-  const displayToRichText = (text) => {
-    return [{ text }];
-  };
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (editorRef.current.innerHTML !== htmlValue) {
+      editorRef.current.innerHTML = htmlValue || '';
+    }
+  }, [htmlValue]);
 
-  const displayValue = richTextToDisplay(value);
-
-  const handleTextChange = (e) => {
-    const newText = e.target.value;
-    onChange(displayToRichText(newText));
-  };
-
-//   const getSelectedText = () => {
-//     const textarea = textareaRef.current;
-//     if (!textarea) return '';
-    
-//     const start = textarea.selectionStart;
-//     const end = textarea.selectionEnd;
-//     return textarea.value.substring(start, end);
-//   };
-
-  const insertFormatting = (formatType) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end);
-
-    if (!selectedText) {
-      alert('Vui lòng chọn văn bản để định dạng');
+  const updateActiveFormats = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || !editorRef.current) {
+      setActiveFormats({ bold: false, italic: false, link: false });
       return;
     }
 
-    let formattedText = '';
-    switch (formatType) {
-      case 'bold':
-        formattedText = `<strong>${selectedText}</strong>`;
-        break;
-      case 'italic':
-        formattedText = `<em>${selectedText}</em>`;
-        break;
-      case 'link':
-        setSelectedText(selectedText);
-        setShowLinkDialog(true);
-        return;
-      default:
-        return;
-    }
-
-    // Replace selected text with formatted text
-    const newText = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
-    onChange(displayToRichText(newText));
-
-    // Set cursor position after the inserted text
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + formattedText.length, start + formattedText.length);
-    }, 0);
-  };
-
-  const applyFontSize = (size) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    let selectionStart = start;
-    let selectionEnd = end;
-    let selected = textarea.value.substring(start, end);
-
-    if (!selected) {
-      selected = textarea.value;
-      selectionStart = 0;
-      selectionEnd = textarea.value.length;
-    }
-
-    if (!selected) {
+    const focusNode = selection.focusNode || selection.anchorNode;
+    if (!focusNode || !editorRef.current.contains(focusNode)) {
+      setActiveFormats({ bold: false, italic: false, link: false });
       return;
     }
 
-    const fontWrapped = size
-      ? `<span style="font-size:${size}">${selected}</span>`
-      : selected;
+    const boldState = queryCommandStateSafe('bold');
+    const italicState = queryCommandStateSafe('italic');
+    const insideLink = isNodeInsideLink(focusNode);
+    const linkState = insideLink || queryCommandStateSafe('createLink');
 
-    const newText =
-      textarea.value.substring(0, selectionStart) +
-      fontWrapped +
-      textarea.value.substring(selectionEnd);
+    setActiveFormats({
+      bold: Boolean(boldState),
+      italic: Boolean(italicState),
+      link: Boolean(linkState),
+    });
+  }, []);
 
-    onChange(displayToRichText(newText));
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(
-        selectionStart + fontWrapped.length,
-        selectionStart + fontWrapped.length,
-      );
-    }, 0);
-  };
+  const syncContent = useCallback(() => {
+    if (!editorRef.current) return;
+    const clone = editorRef.current.cloneNode(true);
+    const html = clone.innerHTML;
+    const text = clone.innerText || editorRef.current.innerText;
+    onChange([{ html, text: stripHtml(text) }]);
+    updateActiveFormats();
+  }, [onChange, updateActiveFormats]);
 
-  const normalizeFontSizeInput = (raw) => {
-    if (raw === undefined || raw === null) return null;
-    const trimmed = String(raw).trim();
-    if (!trimmed) return '';
+  useEffect(() => {
+    const onSelectionChange = () => updateActiveFormats();
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+    };
+  }, [updateActiveFormats]);
 
-    const numberOnly = trimmed.replace(',', '.');
-    const numericPattern = /^(\d+)(\.\d+)?$/;
-    const cssPattern = /^(\d+(\.\d+)?)(px|pt|em|rem|%)$/i;
-
-    if (numericPattern.test(numberOnly)) {
-      const value = Math.min(Math.max(parseFloat(numberOnly), MIN_FONT_PX), MAX_FONT_PX);
-      return `${Number.isInteger(value) ? value : value.toFixed(1)}px`;
+  const focusEditor = useCallback(() => {
+    if (editorRef.current) {
+      editorRef.current.focus();
     }
-    if (cssPattern.test(trimmed)) {
-      return trimmed.toLowerCase();
+  }, []);
+
+  const saveSelection = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    try {
+      savedRangeRef.current = range.cloneRange();
+    } catch (e) {
+      savedRangeRef.current = range;
     }
-    return null;
-  };
+    setSelectedText(selection.toString());
+  }, []);
 
-  const toDisplayValue = (normalized) => {
-    if (!normalized) return '';
-    if (normalized.endsWith('px')) return normalized.replace(/px$/, '');
-    return normalized;
-  };
-
-  const commitFontSize = (raw) => {
-    const normalized = normalizeFontSizeInput(raw);
-    if (normalized === null) {
-      alert('Kích cỡ không hợp lệ. Vui lòng nhập số (ví dụ 18) hoặc đơn vị hợp lệ như 18px, 1.2rem.');
-      return;
+  const restoreSelection = useCallback(() => {
+    const range = savedRangeRef.current;
+    if (!range) return;
+    const selection = window.getSelection();
+    if (!selection) return;
+    selection.removeAllRanges();
+    try {
+      selection.addRange(range);
+    } catch (e) {
+      // older browsers may throw if range is invalid
     }
-    applyFontSize(normalized);
-    setPendingFont(toDisplayValue(normalized));
-  };
+  }, []);
 
-  const insertLink = () => {
-    if (!linkUrl || !selectedText) return;
+  const runAndSync = useCallback(
+    (fn) => {
+      focusEditor();
+      fn();
+      requestAnimationFrame(syncContent);
+    },
+    [focusEditor, syncContent],
+  );
 
-    const textarea = textareaRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    
-    const linkText = `<a href="${linkUrl}" target="_blank">${selectedText}</a>`;
-    const newText = textarea.value.substring(0, start) + linkText + textarea.value.substring(end);
-    
-    onChange(displayToRichText(newText));
-    
+  const insertFormatting = useCallback(
+    (formatType) => {
+      runAndSync(() => {
+        switch (formatType) {
+          case 'bold':
+            document.execCommand('bold', false);
+            break;
+          case 'italic':
+            document.execCommand('italic', false);
+            break;
+          default:
+            break;
+        }
+      });
+    },
+    [runAndSync],
+  );
+
+  const handleLinkInsert = useCallback(() => {
+    const url = linkUrl.trim();
+    if (!url) return;
     setShowLinkDialog(false);
+    runAndSync(() => {
+      restoreSelection();
+      const normalizedUrl =
+        /^https?:\/\//i.test(url) || url.startsWith('mailto:') || url.startsWith('#')
+          ? url
+          : `https://${url}`;
+      document.execCommand('createLink', false, normalizedUrl);
+    });
     setLinkUrl('');
-    setSelectedText('');
+  }, [linkUrl, restoreSelection, runAndSync]);
 
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + linkText.length, start + linkText.length);
-    }, 0);
+  const openLinkDialog = () => {
+    saveSelection();
+    setLinkUrl('');
+    setShowLinkDialog(true);
   };
+
+  const handleToolbarMouseDown = (event) => {
+    event.preventDefault();
+    saveSelection();
+  };
+
+  const handleLinkButton = useCallback(() => {
+    if (activeFormats.link) {
+      // unlink
+      runAndSync(() => {
+        document.execCommand('unlink', false);
+      });
+      return;
+    }
+    openLinkDialog();
+  }, [activeFormats.link, runAndSync]);
+
+  const editorClassNames = [
+    'rich-text-editor',
+    variant === 'compact' ? 'rich-text-editor--compact' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const editorAreaClassNames = [
+    'control',
+    'rich-editor',
+    variant === 'compact' ? 'rich-editor--compact' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <div className="rich-text-editor">
+    <div className={editorClassNames}>
       <div className="toolbar">
         <button
           type="button"
-          className="toolbar-btn"
-          onClick={() => insertFormatting('bold')}
+          className={`toolbar-btn ${activeFormats.bold ? 'is-active' : ''}`}
           title="In đậm (Ctrl+B)"
+          onMouseDown={handleToolbarMouseDown}
+          onClick={() => insertFormatting('bold')}
         >
           <FiBold />
         </button>
         <button
           type="button"
-          className="toolbar-btn"
-          onClick={() => insertFormatting('italic')}
+          className={`toolbar-btn ${activeFormats.italic ? 'is-active' : ''}`}
           title="In nghiêng (Ctrl+I)"
+          onMouseDown={handleToolbarMouseDown}
+          onClick={() => insertFormatting('italic')}
         >
           <FiItalic />
         </button>
         <button
           type="button"
-          className="toolbar-btn"
-          onClick={() => insertFormatting('link')}
-          title="Thêm link"
+          className={`toolbar-btn ${activeFormats.link ? 'is-active' : ''}`}
+          title={activeFormats.link ? 'Bỏ liên kết' : 'Chèn liên kết'}
+          onMouseDown={handleToolbarMouseDown}
+          onClick={handleLinkButton}
         >
           <FiLink />
         </button>
-        <div className="toolbar-font-size">
-          <input
-            type="text"
-            className="toolbar-input"
-            list="font-size-options"
-            inputMode="decimal"
-            value={pendingFont}
-            placeholder="Cỡ"
-            onChange={(e) => {
-              const next = e.target.value;
-              setPendingFont(next);
-              // nếu giá trị khớp preset -> áp dụng ngay
-              if (FONT_SIZE_PRESETS.includes(next.trim())) {
-                commitFontSize(next);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                commitFontSize(pendingFont);
-              }
-            }}
-            onBlur={() => commitFontSize(pendingFont)}
-          />
-          <datalist id="font-size-options">
-            {FONT_SIZE_PRESETS.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
-        </div>
       </div>
-      
-      <textarea
-        ref={textareaRef}
-        className="control textarea rich-textarea"
-        rows={5}
-        placeholder={placeholder}
-        value={displayValue}
-        onChange={handleTextChange}
+
+      <div
+        ref={editorRef}
+        className={editorAreaClassNames}
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder={placeholder}
+        onInput={(e) => {
+          syncContent(e);
+        }}
+        onBlur={saveSelection} // Save selection on blur to preserve it for toolbar actions
+        onMouseUp={updateActiveFormats}
+        onKeyUp={updateActiveFormats}
       />
 
-      <div className="format-help">
-        <small>
-          💡 Chọn văn bản và nhấn nút định dạng, dùng ô “Cỡ” để nhập số (ví dụ 18) hoặc HTML: 
-          <code>&lt;strong&gt;</code>, <code>&lt;em&gt;</code>, <code>&lt;a href="..."&gt;</code>, <code>&lt;span style="font-size:18px"&gt;</code>
-        </small>
-      </div>
+      {showFormatHelp && (
+        <div className="format-help">
+          <small>
+            💡 Chọn văn bản rồi sử dụng nút trên thanh công cụ để in đậm, in nghiêng, thêm liên kết
+            hoặc thay đổi cỡ chữ.
+          </small>
+        </div>
+      )}
 
       {showLinkDialog && (
         <div className="link-dialog-overlay">
           <div className="link-dialog">
             <div className="dialog-header">
               <h4>Thêm liên kết</h4>
-              <button
-                type="button"
-                className="close-btn"
-                onClick={() => setShowLinkDialog(false)}
-              >
+              <button type="button" className="close-btn" onClick={() => setShowLinkDialog(false)}>
                 <FiX />
               </button>
             </div>
             <div className="dialog-body">
-              <p>Văn bản đã chọn: <strong>"{selectedText}"</strong></p>
+              <p>
+                Văn bản đã chọn: <strong>"{selectedText}"</strong>
+              </p>
               <label>URL liên kết:</label>
               <input
                 type="url"
@@ -279,18 +300,14 @@ function RichTextEditor({ value, onChange, placeholder = "Nhập nội dung..." 
               />
             </div>
             <div className="dialog-footer">
-              <button
-                type="button"
-                className="btn outline"
-                onClick={() => setShowLinkDialog(false)}
-              >
-                Hủy
+              <button type="button" className="btn outline" onClick={() => setShowLinkDialog(false)}>
+                Huỷ
               </button>
               <button
                 type="button"
                 className="btn primary"
-                onClick={insertLink}
-                disabled={!linkUrl}
+                onClick={handleLinkInsert}
+                disabled={!linkUrl.trim()}
               >
                 Thêm liên kết
               </button>

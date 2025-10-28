@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   FiType,
   FiAlignLeft,
@@ -8,8 +8,16 @@ import {
   FiPlus,
   FiUploadCloud,
   FiX,
+  FiMove,
 } from 'react-icons/fi';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
@@ -17,14 +25,53 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import RichTextEditor from '../RichTextEditor';
 import ListItemEditor from '../ListItemEditor';
 import '../../styles/RichTextEditor.css';
 
 import './BlockEditor.scss';
 
+const stripHtml = (input = '') =>
+  input
+    .replace(/<(?:.|\n)*?>/gm, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const toPlainText = (value) => {
+  const strip = (input) => stripHtml(typeof input === 'string' ? input : '');
+
+  if (!value) return '';
+  if (typeof value === 'string') return strip(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') return strip(item);
+        if (item && typeof item.html === 'string') return strip(item.html);
+        if (item && typeof item.text === 'string') return strip(item.text);
+        return '';
+      })
+      .join(' ')
+      .trim();
+  }
+  if (typeof value === 'object') {
+    if (typeof value.html === 'string') return strip(value.html);
+    if (typeof value.text === 'string') return strip(value.text);
+  }
+  return '';
+};
+
 // Component Image Block
-const ImageBlock = ({ block, onUpdate, onRemove, attributes, listeners, setNodeRef, style }) => {
+const ImageBlock = ({
+  block,
+  onUpdate,
+  onRemove,
+  attributes,
+  listeners,
+  setNodeRef,
+  style,
+  isDragging,
+}) => {
   const [imageUrl, setImageUrl] = useState('');
 
   useEffect(() => {
@@ -74,15 +121,31 @@ const ImageBlock = ({ block, onUpdate, onRemove, attributes, listeners, setNodeR
   const isCaptionInvalid = hasImage && !captionValue.trim();
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="block card">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`block card is-sortable ${isDragging ? 'is-placeholder' : ''}`}
+    >
       <div className="block-header">
         <div className="left">
           <FiImage className="block-icon" />
           <span className="title">Ảnh</span>
         </div>
-        <button type="button" className="pill danger" onClick={onRemove}>
-          <FiTrash2 />
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="pill handle"
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.preventDefault()}
+            aria-label="Kéo để sắp xếp"
+          >
+            <FiMove />
+          </button>
+          <button type="button" className="pill danger" onClick={onRemove}>
+            <FiTrash2 />
+          </button>
+        </div>
       </div>
       <div className="block-body">
         {hasImage ? (
@@ -143,18 +206,31 @@ const ImageBlock = ({ block, onUpdate, onRemove, attributes, listeners, setNodeR
 
 // Sortable wrapper 
 const SortableBlock = ({ id, children }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
     transition,
+    isDragging,
+  } = useSortable({ id });
+  const style = {
+    transform: isDragging ? undefined : CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0 : 1,
   };
-  return children({ setNodeRef, style, attributes, listeners });
+  return children({ setNodeRef, style, attributes, listeners, isDragging });
 };
 
 function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
   const [openDropdownIndex, setOpenDropdownIndex] = useState(null);
-  
+  const [activeId, setActiveId] = useState(null);
+  const [activeBlock, setActiveBlock] = useState(null);
 
+  const getBlockById = useCallback(
+    (id) => (blocks || []).find((item) => item?.id === id) || null,
+    [blocks]
+  );
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   useEffect(() => {
@@ -209,13 +285,180 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
     updateBlock(index, updates);
   };
 
-  const onDragEnd = (event) => {
+
+  const handleDragStart = (event) => {
+    const { active } = event;
+    setActiveId(active.id);
+    setActiveBlock(getBlockById(active.id));
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+    setActiveBlock(null);
+  };
+
+  const handleDragEnd = (event) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = blocks.findIndex((b) => b.id === active.id);
-    const newIndex = blocks.findIndex((b) => b.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    setBlocks((items) => arrayMove(items, oldIndex, newIndex));
+    if (!over) {
+      handleDragCancel();
+      return;
+    }
+    if (active.id !== over.id) {
+      setBlocks((items) => {
+        const list = items || [];
+        const oldIndex = list.findIndex((b) => b.id === active.id);
+        const newIndex = list.findIndex((b) => b.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return list;
+        return arrayMove(list, oldIndex, newIndex);
+      });
+    }
+    handleDragCancel();
+  };
+
+  const renderOverlayBlock = (block) => {
+    if (!block) return null;
+
+    if (block.type === 'heading') {
+      const value =
+        block.content && typeof block.content === 'object'
+          ? block.content
+          : { level: 'H2', text: toPlainText(block.content) };
+      return (
+        <div className="block card is-sortable drag-overlay">
+          <div className="block-header">
+            <div className="left">
+              <FiType className="block-icon" />
+              <span className="title">Tiêu đề</span>
+            </div>
+            <div className="header-actions">
+              <span className="pill handle disabled">
+                <FiMove />
+              </span>
+              <span className="pill danger disabled">
+                <FiTrash2 />
+              </span>
+            </div>
+          </div>
+          <div className="block-body">
+            <div className="row">
+              <button type="button" className="dropdown-toggle control" disabled>
+                {value.level}
+              </button>
+            </div>
+            <input
+              className="control input"
+              type="text"
+              value={value.text || ''}
+              readOnly
+              placeholder="Nhập nội dung tiêu đề..."
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (block.type === 'paragraph') {
+      const textValue = Array.isArray(block.content)
+        ? toPlainText(block.content)
+        : toPlainText(block.content);
+      return (
+        <div className="block card is-sortable drag-overlay">
+          <div className="block-header">
+            <div className="left">
+              <FiAlignLeft className="block-icon" />
+              <span className="title">Đoạn văn</span>
+            </div>
+            <div className="header-actions">
+              <span className="pill handle disabled">
+                <FiMove />
+              </span>
+              <span className="pill danger disabled">
+                <FiTrash2 />
+              </span>
+            </div>
+          </div>
+          <div className="block-body">
+            <textarea
+              className="control textarea rich-textarea"
+              rows={5}
+              readOnly
+              value={textValue}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (block.type === 'image') {
+      const altValue = block.alt || '';
+      const captionValue = block.caption || '';
+      return (
+        <div className="block card is-sortable drag-overlay">
+          <div className="block-header">
+            <div className="left">
+              <FiImage className="block-icon" />
+              <span className="title">Ảnh</span>
+            </div>
+            <div className="header-actions">
+              <span className="pill handle disabled">
+                <FiMove />
+              </span>
+              <span className="pill danger disabled">
+                <FiTrash2 />
+              </span>
+            </div>
+          </div>
+          <div className="block-body">
+            <div className="image-overlay-placeholder">
+              <FiImage size={32} />
+            </div>
+            <div className="image-meta">
+              <label className="control-label">Mô tả ảnh (alt)</label>
+              <input className="control input" type="text" value={altValue} readOnly />
+            </div>
+            <div className="image-meta">
+              <label className="control-label">Chú thích ảnh</label>
+              <textarea className="control textarea" rows={2} value={captionValue} readOnly />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (block.type === 'list') {
+      const items = Array.isArray(block.content) ? block.content : [];
+      return (
+        <div className="block card is-sortable drag-overlay">
+          <div className="block-header">
+            <div className="left">
+              <FiList className="block-icon" />
+              <span className="title">Danh sách</span>
+            </div>
+            <div className="header-actions">
+              <span className="pill handle disabled">
+                <FiMove />
+              </span>
+              <span className="pill danger disabled">
+                <FiTrash2 />
+              </span>
+            </div>
+          </div>
+          <div className="block-body">
+            {items.length === 0 ? (
+              <div className="list-preview-item empty">Danh sách trống</div>
+            ) : (
+              items.map((item, index) => (
+                <div key={index} className="list-preview-item">
+                  {toPlainText(item)}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -241,7 +484,14 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
         {blocks.length === 0 && (
           <p className="empty">Chưa có nội dung. Thêm block đầu tiên!</p>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragStart={handleDragStart}
+          onDragCancel={handleDragCancel}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
             {blocks.map((block, idx) => {
               if (!block.id) return null;
@@ -252,23 +502,28 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
                     : { level: 'H2', text: '' };
                 return (
                   <SortableBlock key={block.id} id={block.id}>
-                    {({ setNodeRef, style, attributes, listeners }) => (
+                    {({ setNodeRef, style, attributes, listeners, isDragging }) => (
                       <div
                         ref={setNodeRef}
-                        {...attributes}
-                        {...listeners}
                         style={style}
-                        className="block card"
+                        className={`block card is-sortable ${isDragging ? 'is-placeholder' : ''}`}
                       >
                         <div className="block-header">
                           <div className="left">
                             <FiType className="block-icon" />
                             <span className="title">Tiêu đề</span>
                           </div>
-                          <div
-                            className="row"
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                          >
+                          <div className="header-actions">
+                            <button
+                              type="button"
+                              className="pill handle"
+                              {...attributes}
+                              {...listeners}
+                              onClick={(e) => e.preventDefault()}
+                              aria-label="Kéo để sắp xếp"
+                            >
+                              <FiMove />
+                            </button>
                             <button
                               type="button"
                               className="pill danger"
@@ -329,23 +584,28 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
                 const value = block.content || [{ text: '' }];
                 return (
                   <SortableBlock key={block.id} id={block.id}>
-                    {({ setNodeRef, style, attributes, listeners }) => (
+                    {({ setNodeRef, style, attributes, listeners, isDragging }) => (
                       <div
                         ref={setNodeRef}
                         style={style}
-                        {...attributes}
-                        {...listeners}
-                        className="block card"
+                        className={`block card is-sortable ${isDragging ? 'is-placeholder' : ''}`}
                       >
                         <div className="block-header">
                           <div className="left">
                             <FiAlignLeft className="block-icon" />
                             <span className="title">Đoạn văn</span>
                           </div>
-                          <div
-                            className="row"
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                          >
+                          <div className="header-actions">
+                            <button
+                              type="button"
+                              className="pill handle"
+                              {...attributes}
+                              {...listeners}
+                              onClick={(e) => e.preventDefault()}
+                              aria-label="Kéo để sắp xếp"
+                            >
+                              <FiMove />
+                            </button>
                             <button
                               type="button"
                               className="pill danger"
@@ -370,13 +630,14 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
               if (block.type === 'image') {
                 return (
                   <SortableBlock key={block.id} id={block.id}>
-                    {({ setNodeRef, style, attributes, listeners }) => (
+                    {({ setNodeRef, style, attributes, listeners, isDragging }) => (
                       <ImageBlock
                         block={block}
                         attributes={attributes}
                         listeners={listeners}
                         setNodeRef={setNodeRef}
                         style={style}
+                        isDragging={isDragging}
                         onUpdate={(payload) => handleImageUpdate(idx, payload)}
                         onRemove={() => removeBlock(idx)}
                       />
@@ -399,23 +660,28 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
                   setBlockContent(idx, items.length > 1 ? items.slice(0, -1) : items);
                 return (
                   <SortableBlock key={block.id} id={block.id}>
-                    {({ setNodeRef, style, attributes, listeners }) => (
+                    {({ setNodeRef, style, attributes, listeners, isDragging }) => (
                       <div
                         ref={setNodeRef}
                         style={style}
-                        {...attributes}
-                        {...listeners}
-                        className="block card"
+                        className={`block card is-sortable ${isDragging ? 'is-placeholder' : ''}`}
                       >
                         <div className="block-header">
                           <div className="left">
                             <FiList className="block-icon" />
                             <span className="title">Danh sách</span>
                           </div>
-                          <div
-                            className="row"
-                            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                          >
+                          <div className="header-actions">
+                            <button
+                              type="button"
+                              className="pill handle"
+                              {...attributes}
+                              {...listeners}
+                              onClick={(e) => e.preventDefault()}
+                              aria-label="Kéo để sắp xếp"
+                            >
+                              <FiMove />
+                            </button>
                             <button
                               type="button"
                               className="pill danger"
@@ -452,6 +718,9 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
               return null;
             })}
           </SortableContext>
+          <DragOverlay modifiers={[restrictToVerticalAxis]}>
+            {renderOverlayBlock(activeBlock)}
+          </DragOverlay>
         </DndContext>
       </div>
     </>
