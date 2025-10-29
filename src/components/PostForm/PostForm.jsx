@@ -75,6 +75,7 @@ function PostForm() {
   const [showTargetSiteError, setShowTargetSiteError] = useState(false);
   const [blockSearch, setBlockSearch] = useState('');
   const [activeInspectorTab, setActiveInspectorTab] = useState('post');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -101,10 +102,19 @@ function PostForm() {
     fetchCategories();
   }, []);
 
-  const thumbnailUrl = useMemo(
-    () => (thumbnail ? URL.createObjectURL(thumbnail) : ''),
-    [thumbnail]
-  );
+  useEffect(() => {
+    if (!thumbnail) {
+      setThumbnailUrl('');
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(thumbnail);
+    setThumbnailUrl(objectUrl);
+
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [thumbnail]);
 
   const dropRef = useRef(null);
   const titleRef = useRef(null);
@@ -145,10 +155,32 @@ function PostForm() {
     setShowTargetSiteError(false);
   };
 
-  const handleCategoryToggle = (value) => {
+  const buildSelectedCategory = (option) => {
+    if (!option) return null;
+    const slug =
+      typeof option.slug === 'string' && option.slug.trim()
+        ? option.slug.trim()
+        : typeof option.value === 'string'
+        ? option.value.trim()
+        : '';
+    const label =
+      typeof option.label === 'string' && option.label.trim()
+        ? option.label.trim()
+        : typeof option.value === 'string'
+        ? option.value.trim()
+        : '';
+    if (!slug && !label) return null;
+    return { value: label || slug, slug };
+  };
+
+  const handleCategoryToggle = (option) => {
+    const normalized = buildSelectedCategory(option);
+    if (!normalized) return;
     setSelectedCategories((prev) => {
-      const exists = prev.includes(value);
-      const next = exists ? prev.filter((item) => item !== value) : [...prev, value];
+      const exists = prev.some((item) => item.slug === normalized.slug);
+      const next = exists
+        ? prev.filter((item) => item.slug !== normalized.slug)
+        : [...prev, normalized];
       if (showCategoryError && next.length > 0) setShowCategoryError(false);
       return next;
     });
@@ -180,8 +212,16 @@ function PostForm() {
       if (!created || !created.value) {
         throw new Error('Phản hồi không hợp lệ.');
       }
+      const normalized = buildSelectedCategory({
+        label: created.label,
+        value: created.value,
+      });
       setCategoryOptions((prev) => [...prev, created]);
-      setSelectedCategories((prev) => [...prev, created.value]);
+      setSelectedCategories((prev) => {
+        if (!normalized) return prev;
+        if (prev.some((item) => item.slug === normalized.slug)) return prev;
+        return [...prev, normalized];
+      });
       setNewCategoryName('');
       setIsAddingCategory(false);
       setShowCategoryError(false);
@@ -598,8 +638,8 @@ function PostForm() {
                           <label key={item.value} className="checkbox-option">
                             <input
                               type="checkbox"
-                              checked={selectedCategories.includes(item.value)}
-                              onChange={() => handleCategoryToggle(item.value)}
+                              checked={selectedCategories.some((cat) => cat.slug === (item.slug || item.value))}
+                              onChange={() => handleCategoryToggle({ label: item.label, value: item.value, slug: item.slug ? item.slug : item.value })}
                             />
                             <span>{item.label}</span>
                           </label>
