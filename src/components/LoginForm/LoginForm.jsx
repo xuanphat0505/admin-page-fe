@@ -6,7 +6,7 @@ import AuthContext from '../../context/AuthProvider'
 import axios from '../../api'
 import { Link, useNavigate } from 'react-router-dom'
 
-const LOGIN_URL = '/api/v1/auth'
+const LOGIN_URL = '/auth'
 
 const LoginForm = () => {
   const navigate = useNavigate()
