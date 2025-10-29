@@ -3,27 +3,170 @@ import { FiBold, FiItalic, FiLink, FiX } from 'react-icons/fi';
 
 const stripHtml = (input = '') => input.replace(/<(?:.|\n)*?>/gm, ' ').replace(/\s+/g, ' ').trim();
 
+const escapeHtml = (text = '') =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const escapeAttribute = (text = '') => escapeHtml(text).replace(/'/g, '&#39;');
+
+const formatSegmentToHtml = (segment) => {
+  const {
+    text = '',
+    bold = false,
+    italic = false,
+    underline = false,
+    link = '',
+  } = segment || {};
+
+  if (text === undefined || text === null) return '';
+  const escaped = escapeHtml(String(text)).replace(/\n/g, '<br>');
+
+  const wrap = (content, condition, tag) => (condition ? `<${tag}>${content}</${tag}>` : content);
+
+  let content = escaped;
+  content = wrap(content, underline, 'u');
+  content = wrap(content, italic, 'em');
+  content = wrap(content, bold, 'strong');
+  content = link
+    ? `<a href="${escapeAttribute(link)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+    : content;
+
+  return content;
+};
+
+const segmentsToHtml = (segments = []) =>
+  segments
+    .map((segment) => formatSegmentToHtml(segment))
+    .join('')
+    .replace(/\u00a0/g, '&nbsp;');
+
+const DEFAULT_FORMAT = Object.freeze({
+  bold: false,
+  italic: false,
+  underline: false,
+  link: '',
+});
+
+const mergeSegments = (segments = []) => {
+  const merged = [];
+  segments.forEach((segment) => {
+    if (!segment) return;
+    const text = typeof segment.text === 'string' ? segment.text.replace(/\r/g, '').replace(/\u00a0/g, ' ') : '';
+    if (!text) return;
+    const printable = text;
+    const last = merged[merged.length - 1];
+    if (
+      last &&
+      last.bold === !!segment.bold &&
+      last.italic === !!segment.italic &&
+      last.underline === !!segment.underline &&
+      (last.link || '') === (segment.link || '')
+    ) {
+      last.text += printable;
+    } else {
+      merged.push({
+        text: printable,
+        bold: !!segment.bold,
+        italic: !!segment.italic,
+        underline: !!segment.underline,
+        link: segment.link || '',
+      });
+    }
+  });
+  return merged;
+};
+
+const collectSegmentsFromNode = (node, format, target) => {
+  if (!node) return;
+
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.nodeValue;
+    if (text) {
+      target.push({
+        text,
+        bold: format.bold,
+        italic: format.italic,
+        underline: format.underline,
+        link: format.link,
+      });
+    }
+    return;
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+  const tag = node.tagName;
+  if (tag === 'BR') {
+    target.push({
+      text: '\n',
+      bold: format.bold,
+      italic: format.italic,
+      underline: format.underline,
+      link: format.link,
+    });
+    return;
+  }
+
+  const nextFormat = {
+    bold: format.bold,
+    italic: format.italic,
+    underline: format.underline,
+    link: format.link,
+  };
+
+  if (tag === 'B' || tag === 'STRONG') nextFormat.bold = true;
+  if (tag === 'I' || tag === 'EM') nextFormat.italic = true;
+  if (tag === 'U') nextFormat.underline = true;
+  if (tag === 'A') nextFormat.link = node.getAttribute('href')?.trim() || '';
+
+  node.childNodes.forEach((child) => collectSegmentsFromNode(child, nextFormat, target));
+};
+
+const collectSegments = (root) => {
+  if (!root) return [];
+  const segments = [];
+  root.childNodes.forEach((child) => collectSegmentsFromNode(child, DEFAULT_FORMAT, segments));
+  return mergeSegments(segments);
+};
+
 const valueToHtml = (value) => {
   if (!value) return '';
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
+    if (value.length === 0) return '';
+
+    const hasFormatFlags = value.every(
+      (item) =>
+        item &&
+        typeof item === 'object' &&
+        Object.prototype.hasOwnProperty.call(item, 'text') &&
+        (Object.prototype.hasOwnProperty.call(item, 'bold') ||
+          Object.prototype.hasOwnProperty.call(item, 'italic') ||
+          Object.prototype.hasOwnProperty.call(item, 'underline') ||
+          Object.prototype.hasOwnProperty.call(item, 'link')),
+    );
+
+    if (hasFormatFlags) {
+      return segmentsToHtml(value);
+    }
+
     const first = value[0];
-    if (!first) return '';
     if (typeof first === 'string') return first;
     if (typeof first?.html === 'string') return first.html;
-    if (typeof first?.text === 'string') return first.text;
+    if (typeof first?.text === 'string') return escapeHtml(first.text);
+
     return value
       .map((item) => {
         if (typeof item === 'string') return item;
         if (typeof item?.html === 'string') return item.html;
-        if (typeof item?.text === 'string') return item.text;
+        if (typeof item?.text === 'string') return escapeHtml(item.text);
         return '';
       })
       .join('');
   }
   if (typeof value === 'object') {
+    if (Array.isArray(value.segments)) return segmentsToHtml(value.segments);
     if (typeof value.html === 'string') return value.html;
-    if (typeof value.text === 'string') return value.text;
+    if (typeof value.text === 'string') return escapeHtml(value.text);
   }
   return '';
 };
@@ -97,9 +240,8 @@ function RichTextEditor({
   const syncContent = useCallback(() => {
     if (!editorRef.current) return;
     const clone = editorRef.current.cloneNode(true);
-    const html = clone.innerHTML;
-    const text = clone.innerText || editorRef.current.innerText;
-    onChange([{ html, text: stripHtml(text) }]);
+    const segments = collectSegments(clone);
+    onChange(segments);
     updateActiveFormats();
   }, [onChange, updateActiveFormats]);
 
@@ -259,8 +401,8 @@ function RichTextEditor({
         contentEditable
         suppressContentEditableWarning
         data-placeholder={placeholder}
-        onInput={(e) => {
-          syncContent(e);
+        onInput={() => {
+          syncContent();
         }}
         onBlur={saveSelection} // Save selection on blur to preserve it for toolbar actions
         onMouseUp={updateActiveFormats}

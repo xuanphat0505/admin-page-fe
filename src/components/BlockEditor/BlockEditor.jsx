@@ -547,7 +547,7 @@ function BlockEditor({ blocks, setBlocks, showBlockButtons = true }) {
                               </button>
                               {openDropdownIndex === idx && (
                                 <div className="dropdown-menu">
-                                  {['H1', 'H2', 'H3'].map((lv) => (
+                                  {['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].map((lv) => (
                                     <div
                                       key={lv}
                                       className={`dropdown-item ${

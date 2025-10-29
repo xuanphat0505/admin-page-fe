@@ -111,7 +111,7 @@ export const AuthProvider = ({ children }) => {
         clearLogoutTimer()
         unbindActivityListeners()
         try {
-            await api.post('/api/v1/auth/logout')
+            await api.post('/api/v1/auth/logout', null, { skipAuthRedirect: true })
         } catch {}
         setAuth({})
         try { localStorage.removeItem('authState') } catch {}
