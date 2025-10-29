@@ -13,6 +13,7 @@ import {
   FiChevronRight,
   FiRotateCcw,
   FiMoreHorizontal,
+  FiChevronUp,
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import api from '../../api';
@@ -75,13 +76,16 @@ function PostForm() {
   const [showTargetSiteError, setShowTargetSiteError] = useState(false);
   const [blockSearch, setBlockSearch] = useState('');
   const [activeInspectorTab, setActiveInspectorTab] = useState('post');
+  const [isMobileView, setIsMobileView] = useState(false);
+  const [isInserterPinned, setIsInserterPinned] = useState(true);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState('');
 
   useEffect(() => {
     const fetchCategories = async () => {
       setIsFetchingCategories(true);
       try {
-        const response = await api.get('/api/v1/categories');
+        const response = await api.get('/categories');
         const categories = Array.isArray(response?.data?.data) ? response.data.data : [];
         if (categories.length > 0) {
           setCategoryOptions(categories);
@@ -116,8 +120,68 @@ function PostForm() {
     };
   }, [thumbnail]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      setIsMobileView(false);
+      return;
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 1024px)');
+    const handleMediaChange = (event) => setIsMobileView(event.matches);
+
+    setIsMobileView(mediaQuery.matches);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleMediaChange);
+      return () => mediaQuery.removeEventListener('change', handleMediaChange);
+    }
+
+    mediaQuery.addListener(handleMediaChange);
+    return () => mediaQuery.removeListener(handleMediaChange);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileView) {
+      setIsInserterPinned(true);
+      return;
+    }
+
+    const inspectorElement = inspectorRef.current;
+    if (!inspectorElement || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsInserterPinned(!entry.isIntersecting);
+      },
+      {
+        root: null,
+        rootMargin: '-96px 0px 0px 0px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(inspectorElement);
+
+    return () => observer.disconnect();
+  }, [isMobileView]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleScroll = () => {
+      const shouldShow = window.scrollY > 320;
+      setShowScrollTop((prev) => (prev === shouldShow ? prev : shouldShow));
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const dropRef = useRef(null);
   const titleRef = useRef(null);
+  const inspectorRef = useRef(null);
 
   const availableSites = [
     { id: 'vinhomecangio', name: 'Vinhomes Green Paradise', url: 'http://vinhomecangio.vn/' },
@@ -207,7 +271,7 @@ function PostForm() {
     }
     try {
       setIsSavingCategory(true);
-      const response = await api.post('/api/v1/categories', { name });
+      const response = await api.post('/categories', { name });
       const created = response?.data?.data;
       if (!created || !created.value) {
         throw new Error('Phản hồi không hợp lệ.');
@@ -424,7 +488,7 @@ function PostForm() {
         JSON.stringify(selectedSites.length > 0 ? selectedSites : availableSites.map((site) => site.url))
       );
 
-      const response = await api.post('/api/v1/news/upload', formData, {
+      const response = await api.post('/news/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -516,7 +580,7 @@ function PostForm() {
       </header>
 
       <div className="wp-editor__workspace">
-        <aside className="wp-editor__inserter">
+        <aside className={`wp-editor__inserter ${isInserterPinned ? 'is-pinned' : 'is-unpinned'}`}>
           <div className="inserter__tabs">
             <button type="button" className="is-active">Blocks</button>
             <button type="button">Patterns</button>
@@ -590,7 +654,7 @@ function PostForm() {
           </div>
         </main>
 
-        <aside className="wp-editor__inspector">
+        <aside className="wp-editor__inspector" ref={inspectorRef}>
           <div className="inspector__tabs">
             <button
               type="button"
@@ -784,6 +848,18 @@ function PostForm() {
           )}
         </aside>
       </div>
+      <button
+        type="button"
+        className={`scroll-top-btn ${showScrollTop ? 'is-visible' : ''}`}
+        onClick={() => {
+          if (typeof window !== 'undefined') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }}
+        aria-label="Quay lại đầu trang"
+      >
+        <FiChevronUp size={20} />
+      </button>
     </form>
   );
 }

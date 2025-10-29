@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { MdOutlineMail, MdLockOutline } from 'react-icons/md'
 import { FaRegUserCircle } from 'react-icons/fa'
 import { Link, useNavigate } from 'react-router-dom'
@@ -7,7 +7,7 @@ import { toast } from 'react-toastify'
 
 import './RegisterForm.scss'
 
-const REGISTER_URL = '/api/v1/auth/register'
+const REGISTER_URL = '/auth/register'
 const TOAST_ID_SUCCESS = 'register-success'
 const TOAST_ID_ERROR = 'register-error'
 
@@ -31,24 +31,24 @@ const RegisterForm = () => {
     const normalizedEmail = email.trim().toLowerCase()
     const trimmedName = fullName.trim()
     if (!username.trim() || !trimmedName || !normalizedEmail || !pwd.trim() || !confirmPwd.trim()) {
-      setErrMsg('Vui lòng nhập đầy đủ thông tin.')
+      setErrMsg('Vui l�ng nh?p d?y d? th�ng tin.')
       return false
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(normalizedEmail)) {
-      setErrMsg('Email không hợp lệ.')
+      setErrMsg('Email kh�ng h?p l?.')
       return false
     }
     if (trimmedName.length > 64) {
-      setErrMsg('Họ tên không được vượt quá 64 ký tự.')
+      setErrMsg('H? t�n kh�ng du?c vu?t qu� 64 k� t?.')
       return false
     }
     if (pwd.length < 6) {
-      setErrMsg('Mật khẩu phải có ít nhất 6 ký tự.')
+      setErrMsg('M?t kh?u ph?i c� �t nh?t 6 k� t?.')
       return false
     }
     if (pwd !== confirmPwd) {
-      setErrMsg('Mật khẩu nhập lại không khớp.')
+      setErrMsg('M?t kh?u nh?p l?i kh�ng kh?p.')
       return false
     }
     return true
@@ -68,19 +68,19 @@ const RegisterForm = () => {
         JSON.stringify({ name: trimmedName, username: username.trim(), email: normalizedEmail, password: pwd }),
         { headers: { 'Content-Type': 'application/json' }, withCredentials: true },
       )
-      toast.success('Đăng ký thành công', { toastId: TOAST_ID_SUCCESS })
+      toast.success('�ang k� th�nh c�ng', { toastId: TOAST_ID_SUCCESS })
       setTimeout(() => navigate('/login'), 600)
     } catch (err) {
       const apiMsg = err?.response?.data?.message
       if (apiMsg) toast.error(apiMsg, { toastId: TOAST_ID_ERROR })
       else if (!err?.response)
-        toast.error('Không có phản hồi từ máy chủ', { toastId: TOAST_ID_ERROR })
+        toast.error('Kh�ng c� ph?n h?i t? m�y ch?', { toastId: TOAST_ID_ERROR })
       else if (err.response?.status === 409)
-        toast.error('Email đã tồn tại', { toastId: TOAST_ID_ERROR })
+        toast.error('Email d� t?n t?i', { toastId: TOAST_ID_ERROR })
       else if (err.response?.status === 400)
-        toast.error('Thiếu thông tin hoặc dữ liệu không hợp lệ', { toastId: TOAST_ID_ERROR })
+        toast.error('Thi?u th�ng tin ho?c d? li?u kh�ng h?p l?', { toastId: TOAST_ID_ERROR })
       else
-        toast.error('Đăng ký thất bại', { toastId: TOAST_ID_ERROR })
+        toast.error('�ang k� th?t b?i', { toastId: TOAST_ID_ERROR })
       errRef.current?.focus()
     } finally { setIsSubmitting(false) }
   }
@@ -88,7 +88,7 @@ const RegisterForm = () => {
   return (
     <div className="login-container">
       <div className="login-box">
-        <h2 className="login-title">Đăng ký</h2>
+        <h2 className="login-title">�ang k�</h2>
         <form className="login-form" noValidate onSubmit={handleSubmit}>
           <p ref={errRef} className={errMsg ? 'errmsg' : 'offscreen'} aria-live="assertive">{errMsg}</p>
 
@@ -96,14 +96,14 @@ const RegisterForm = () => {
             <span className="icon"><FaRegUserCircle /></span>
             <input type="text" id="username" ref={usernameRef} autoComplete="username"
                    onChange={(e) => setUsername(e.target.value)} value={username}
-                   placeholder="Tên đăng nhập" required />
+                   placeholder="T�n dang nh?p" required />
           </div>
 
           <div className="input-group">
             <span className="icon"><FaRegUserCircle /></span>
             <input type="text" id="fullName" autoComplete="name"
                    onChange={(e) => setFullName(e.target.value)} value={fullName}
-                   placeholder="Họ tên" required />
+                   placeholder="H? t�n" required />
           </div>
 
           <div className="input-group">
@@ -117,22 +117,22 @@ const RegisterForm = () => {
             <span className="icon"><MdLockOutline /></span>
             <input type="password" id="password" autoComplete="new-password"
                    onChange={(e) => setPwd(e.target.value)} value={pwd}
-                   placeholder="Mật khẩu" required />
+                   placeholder="M?t kh?u" required />
           </div>
 
           <div className="input-group">
             <span className="icon"><MdLockOutline /></span>
             <input type="password" id="confirmPassword" autoComplete="new-password"
                    onChange={(e) => setConfirmPwd(e.target.value)} value={confirmPwd}
-                   placeholder="Nhập lại mật khẩu" required />
+                   placeholder="Nh?p l?i m?t kh?u" required />
           </div>
 
           <button className="login-btn" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Đang đăng ký...' : 'Đăng ký'}
+            {isSubmitting ? '�ang dang k�...' : '�ang k�'}
           </button>
         </form>
         <div className="login-footer">
-          <span>Đã có tài khoản? <Link to="/login">Đăng nhập</Link></span>
+          <span>�� c� t�i kho?n? <Link to="/login">�ang nh?p</Link></span>
         </div>
       </div>
     </div>
